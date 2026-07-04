@@ -30,6 +30,10 @@ Current status:
   hardening tests, and documentation updates for CI, early-development status, HTTP transport
   warnings, runtime-only secrets, and Phase 8 policy environment variables. Tool behavior and
   MCP tool count remain unchanged.
+- Phase 10 release-ready: repository hygiene, tracked-file inventory, sensitive-content scan,
+  README/security/changelog/project-state review, version check, final quality gates, and Docker
+  release-check validation completed for safe public GitHub publishing as an early-development
+  open-source project. No git tag has been created.
 
 Current tests: 124 passed.
 Current MCP tool count: 19.
@@ -63,5 +67,5 @@ Hard rules:
 - No Hermes runtime testing yet
 - Mocked tests only unless explicitly requested
 
-Next phases:
-- Phase 10 release
+Next step after publish:
+- Live lab validation against a controlled non-production MISP instance.
