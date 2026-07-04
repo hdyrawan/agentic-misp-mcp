@@ -1,10 +1,13 @@
 # Security model
 
-This MIT-licensed project is intentionally workflow-first and in early development. It has been
-validated against a live, non-production MISP lab for both read-only tools and the controlled-write
-path (see `README.md`'s "Live lab validation status" table and `docs/live-validation-plan.md`), but
-broader MISP version compatibility is still untested and it should not be treated as production
-software.
+This MIT-licensed project is intentionally workflow-first and in early development. Live
+read-only validation and core controlled-write validation have both passed against a
+non-production MISP lab (see `README.md`'s "Live lab validation status" table and
+`docs/live-validation-plan.md`). Production deployment itself is **not yet validated**: broader
+MISP version compatibility, edge-case validation (rate limits, timeouts, TLS failure modes, large
+result sets, warninglist endpoint compatibility), and production hardening all remain pending —
+see [`docs/production-readiness.md`](production-readiness.md) for the full scope and checklist.
+Do not treat this project as production software yet.
 
 ## Read-only by default; controlled write behind policy and approval
 

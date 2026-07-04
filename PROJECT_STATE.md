@@ -42,15 +42,32 @@ Current status:
   that no user/organisation/server/settings admin tools exist), `docs/approval-flow.md` (the
   `approved=false` → `pending_approval` → `approved=true` flow with worked examples for
   `submit_ioc_with_approval` and `publish_event_with_approval`), and
-  `docs/live-validation-plan.md` (the live MISP lab validation checklist, not yet executed).
-  README now links all four alongside existing docs. No MCP tools were added, no tool behavior
-  changed, and no dry-run mode was added in this phase.
+  `docs/live-validation-plan.md` (the live MISP lab validation checklist — see Phase 10.2 below
+  for its execution). README now links all four alongside existing docs. No MCP tools were added,
+  no tool behavior changed, and no dry-run mode was added in this phase.
 - Dry-run mode was considered during this review follow-up but deliberately **deferred** until
   after live lab validation (`docs/live-validation-plan.md`) is complete, so that any dry-run
   behavior can be designed against confirmed real MISP response shapes rather than mocked
   assumptions.
+- Phase 10.2 complete: live MISP lab validation executed against a non-production MISP `2.5.42`
+  lab, using Docker and MCP Inspector (both browser and headless `--cli` modes). Read-only tools,
+  error paths (unreachable `MISP_URL`, invalid `MISP_API_KEY`), and policy-blocking behavior all
+  passed. Core controlled-write validation also passed for `submit_ioc_with_approval`,
+  `add_sighting_with_approval`, `tag_event_with_approval`, and `publish_event_with_approval`
+  (including role-based publish blocking), tested against a dedicated sandbox event rather than
+  real historical data. Two real bugs were found and fixed during this pass:
+  - A blank/whitespace `AGENTIC_MISP_MCP_APPROVAL_TOKEN` (e.g. `KEY=` in a `.env` file) was
+    parsed as a configured empty-string token rather than "unset," silently blocking every
+    controlled-write execution. Now normalizes to `None`.
+  - `tag_event_with_approval`/`publish_event_with_approval` reported `status: "executed"` even
+    when MISP itself rejected the operation (HTTP 200 with `saved`/`published: false`). Both now
+    report a distinct `status: "failed"`, with a matching `outcome: "failed"` audit entry.
+  See `docs/live-validation-plan.md` for full evidence and what remains: `propose_event`/
+  `propose_attribute` payload validation, large event/result-set behavior, rate-limit/timeout/TLS
+  failure modes, warninglist endpoint compatibility across MISP versions, broader MISP version
+  compatibility, and final sign-off.
 
-Current tests: 139 passed.
+Current tests: 146 passed.
 Current MCP tool count: 19.
 Current license: MIT.
 
@@ -79,9 +96,21 @@ Hard rules:
 - No raw MISP API proxy
 - No generic user/organisation/server/settings-style admin tools
 - Write tools (14-19 above) are disabled by default and policy/approval-gated when enabled
-- No live MISP testing yet
 - No Hermes runtime testing yet
 - Mocked tests only unless explicitly requested
 
-Next step after publish:
-- Live lab validation against a controlled non-production MISP instance.
+Current validation status:
+- Live read-only lab validation: passed (see Phase 10.2 above).
+- Core controlled-write lab validation: passed for `submit_ioc_with_approval`,
+  `add_sighting_with_approval`, `tag_event_with_approval`, `publish_event_with_approval` (see
+  Phase 10.2 above).
+- Production deployment: **not yet validated**. See `docs/production-readiness.md` for scope,
+  requirements, and acceptance criteria.
+- Not production-ready: lab-validated, not production-certified.
+
+Next steps:
+- Complete remaining live lab validation edge cases: `propose_event`/`propose_attribute` payload
+  validation, large event/result-set behavior, rate-limit/timeout/TLS failure modes, warninglist
+  endpoint compatibility across MISP versions, and final sign-off
+  (`docs/live-validation-plan.md` sections 5-9).
+- Broader MISP version compatibility testing beyond `2.5.42`.

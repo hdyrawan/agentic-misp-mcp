@@ -113,9 +113,32 @@ implicit:
   approval expiry, because none of that exists yet. See
   [`docs/approval-flow.md`](approval-flow.md) for the current, intentionally simple contract.
 
-## Live MISP validation: pending
+## Live MISP validation: read-only and core controlled-write passed, edge cases pending
 
-None of the above has been run against a real MISP instance. Live compatibility — real response
-shapes, real warninglist behavior, real rate limits, and real write-tool behavior in a lab —
-is tracked separately in [`docs/live-validation-plan.md`](live-validation-plan.md) and has not
-started as of this document.
+Separately from this mocked suite, `agentic-misp-mcp` has also been run against a real,
+non-production MISP lab (`2.5.42`) via MCP Inspector. Live read-only tools, policy-blocking
+behavior, and the four core controlled-write tools (`submit_ioc_with_approval`,
+`add_sighting_with_approval`, `tag_event_with_approval`, `publish_event_with_approval`) have all
+passed, including two real bugs found and fixed during that pass (a blank approval-token
+handling bug, and a silent tag/publish failure that used to report `status: "executed"` even
+when MISP rejected the write). See `README.md`'s "Live lab validation status" table for the full
+evidence summary.
+
+This live validation is still narrower than the gaps listed above, though — none of the following
+have been exercised against a real MISP instance yet, and are tracked in
+[`docs/live-validation-plan.md`](live-validation-plan.md):
+
+- Rate limiting (`429`), and real request timeouts.
+- TLS behavior against an untrusted certificate with `MISP_VERIFY_TLS=true` (should fail closed).
+- Large/paginated results at realistic scale (an event with attributes well above
+  `MISP_EVENT_ATTRIBUTE_LIMIT`, a search near `MISP_MAX_LIMIT`).
+- Warninglist endpoint compatibility across MISP versions, and the warninglist
+  hit/miss/`not_available` structured-result behavior specifically.
+- `propose_event`/`propose_attribute` payload-shape validation against a real MISP `/events/add`
+  and `/attributes/add/{event_id}`.
+- MISP version/shape drift beyond `2.5.42`.
+- Final sign-off (`docs/live-validation-plan.md` section 9).
+
+Live-lab evidence is not a substitute for the mocked suite or for production certification — see
+[`docs/production-readiness.md`](production-readiness.md) for what remains before this project is
+considered production-ready.

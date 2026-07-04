@@ -2,9 +2,19 @@
 
 This is a checklist for live validation of `agentic-misp-mcp` against a real, non-production
 MISP instance. This document is the plan and running checklist, not a full report — see
-`README.md`'s "Live lab validation status" table for a summary of what has passed so far. Read-only
-and policy-blocking items have been validated in stages; controlled writes remain unvalidated. Do
-not run any of the controlled write checklist items against a shared or production MISP instance.
+`README.md`'s "Live lab validation status" table for a summary of what has passed so far.
+
+Read-only tools, policy-blocking behavior, and the core controlled-write flows
+(`submit_ioc_with_approval`, `add_sighting_with_approval`, `tag_event_with_approval`,
+`publish_event_with_approval`) have all been validated against an isolated MISP lab — see
+section 8 below for evidence, including two real bugs that were found and fixed during that pass.
+Still unvalidated: `propose_event`/`propose_attribute` payload-shape checks, large event/
+result-set behavior (section 5), rate-limit/timeout/TLS failure modes (section 6), warninglist
+endpoint compatibility across MISP versions (section 7), and final sign-off (section 9). This is
+lab validation evidence, not a production certification — **production deployment itself is not
+yet validated.** See [`docs/production-readiness.md`](production-readiness.md) for the full
+production-readiness scope and acceptance criteria. Do not run any of the controlled write
+checklist items against a shared or production MISP instance.
 
 See [`docs/testing.md`](testing.md) for what the mocked test suite already covers, and
 [`docs/roles.md`](roles.md) / [`docs/approval-flow.md`](approval-flow.md) for the policy and
@@ -35,33 +45,40 @@ For each checklist item below, record:
 
 ## 1. Environment record
 
-- [ ] **MISP version tested:** record the exact MISP core version (and PyMISP/API version if
-      relevant).
-- [ ] **Deployment method:** record how the lab MISP was deployed (e.g. official
-      `misp-docker` compose stack, VM install, existing internal lab instance) and how
-      `agentic-misp-mcp` was run against it (local process, `docker run`, `docker compose`).
-- [ ] **API key permissions:** record which MISP role/org the lab API key belongs to, and
-      confirm it is the minimum needed for the sections being tested (a read-only key for
-      section 2, a write-capable key only when reaching section 8).
-- [ ] **Warninglists loaded / not loaded:** run the read-tool section once with the default
-      MISP warninglists imported, and — if feasible — once with no warninglists imported, to
-      confirm `check_warninglists` degrades to a structured `not_available` result rather than
-      erroring (see `misp/warninglists.py`).
+- [x] **MISP version tested:** MISP `2.5.42`, official `misp-docker` compose stack.
+- [x] **Deployment method:** validated both via Docker (`docker run --rm -i ... --transport
+      stdio`) and via direct `uv run agentic-misp-mcp` (host/non-Docker), driven by MCP Inspector
+      in both browser and headless `--cli` modes.
+- [ ] **API key permissions:** which MISP role/org the lab API key belongs to has not been
+      explicitly recorded in project docs.
+- [ ] **Warninglists loaded / not loaded:** the dual-configuration test (once with default MISP
+      warninglists imported, once without) has not been run — see the `check_warninglists` note
+      in section 2 below.
 
 ## 2. Read tools
 
 `AGENTIC_MISP_MCP_ROLE=read_only`, `AGENTIC_MISP_MCP_ENABLE_WRITE=false`.
 
-- [ ] `search_ioc` against at least one IOC known to exist in the lab, and one known not to.
-- [ ] `investigate_ioc` against the same IOCs; confirm verdict/confidence/next-steps fields are
-      populated sensibly against real data shapes.
-- [ ] `summarize_event` against a real event; confirm no full raw event JSON leaks through.
+- [x] `search_ioc` against at least one IOC known to exist in the lab, and one known not to.
+      Validated with `8.8.8.8`, `54.87.87.13` (matched event `187`), composite `domain|ip`
+      indicators `mines.port0.org`/`eholidays.mooo.com`, and a SHA256 payload-delivery hash.
+- [x] `investigate_ioc` against the same IOCs; confirm verdict/confidence/next-steps fields are
+      populated sensibly against real data shapes. Validated with `54.87.87.13` — returned
+      `suspicious` verdict, medium confidence, related event context, and related IOCs.
+- [x] `summarize_event` against a real event; confirm no full raw event JSON leaks through.
+      Validated against a real MISP event.
 - [ ] `check_warninglists` against a known-listed value and a known-clean value, in both the
-      warninglists-loaded and warninglists-not-loaded configurations from section 1.
+      warninglists-loaded and warninglists-not-loaded configurations from section 1. Structured
+      results have been observed when available, but the specific hit-vs-miss-vs-`not_available`
+      distinction and the dual warninglist-configuration test have not been explicitly recorded —
+      this is one of the acceptance-criteria gaps tracked in
+      [`docs/production-readiness.md`](production-readiness.md).
 
 ## 3. Report tools
 
-- [ ] `generate_ioc_report` against a real IOC.
+- [x] `generate_ioc_report` against a real IOC. Validated with `54.87.87.13` — classified
+      `suspicious` with medium confidence based on live MISP matches, `to_ids` attributes,
+      related event context, and extracted related IOCs.
 - [ ] `generate_event_report` against a real event.
 - [ ] `generate_markdown_ioc_report` and `generate_markdown_event_report` — confirm the
       Markdown renders sensibly and stays within expected bounds for a real event size.
@@ -168,3 +185,7 @@ instance, using a lab-only event/org. Follow the two-call approval flow describe
       (issue, PR, or `CHANGELOG.md` entry).
 - [ ] `PROJECT_STATE.md` and `README.md` roadmap are updated to reflect what was actually
       validated, and what (if anything) remains before considering a tagged release.
+
+See [`docs/production-readiness.md`](production-readiness.md)'s "Release/sign-off checklist" for
+the full, currently-tracked set of acceptance criteria — including which are already satisfied —
+before marking read-only production readiness complete.

@@ -12,16 +12,17 @@ It must not become a raw MISP API proxy.
 ## Project status
 
 - Early development.
-- Not production-ready.
+- Not production-ready. Production deployment is not yet validated; see production-readiness.md
+  for scope, requirements, and acceptance criteria.
 - Current MCP tool count: 19.
 - Primary transport: stdio.
 - HTTP transport is experimental.
 - Python 3.11+.
 - License: MIT.
-- Automated tests use mocked MISP responses.
-- First manual read-only live lab validation passed against MISP 2.5.42 using Docker, stdio, and MCP Inspector.
-- Controlled write execution validation is pending.
-- Broader MISP version compatibility validation is pending.
+- Automated tests use mocked MISP responses, plus live-lab validation (see below).
+- Live read-only lab validation passed against MISP 2.5.42 using Docker, stdio, and MCP Inspector.
+- Core controlled-write validation passed in the same lab: submit_ioc_with_approval, add_sighting_with_approval, tag_event_with_approval, publish_event_with_approval, plus policy blocking. Two real bugs found during that pass are fixed (see "Live validation notes" below).
+- Still pending: propose_event/propose_attribute payload validation, large event/result-set behavior, rate-limit/timeout/TLS failure modes, warninglist endpoint compatibility, broader MISP version compatibility, and final sign-off.
 
 ## Safety boundaries
 
@@ -86,7 +87,10 @@ Approval-gated write tools:
 - tag_event_with_approval
 - publish_event_with_approval
 
-Write tools must return explicit outcomes such as blocked, pending_approval, or executed.
+Write tools must return explicit outcomes such as blocked, pending_approval, executed, or failed.
+"failed" means MISP was actually reached and did not raise an error, but MISP itself rejected the
+operation (for example an HTTP 200 response with saved/published: false) — distinct from
+"executed", which means MISP confirmed the write.
 
 ## Audit semantics
 
@@ -97,6 +101,8 @@ Expected audit outcomes:
 - Allowed successful call: success=true, outcome=success.
 - Blocked policy decision: allowed=false, success=false, outcome=blocked.
 - Runtime error or validation failure: success=false, outcome=error.
+- Controlled write reached MISP but MISP rejected the operation (tool status="failed"):
+  success=false, outcome=failed. Distinct from both blocked and error.
 
 Sensitive values such as approval_token, API keys, authorization headers, bearer tokens, cookies,
 passwords, and secrets must be redacted.
@@ -168,32 +174,50 @@ make check
 
 ## Live validation notes
 
-Read-only live validation passed against MISP 2.5.42.
+Read-only and core controlled-write live validation both passed against MISP 2.5.42.
 
 Validated:
 
 - Docker runtime.
 - config-check.
 - MISP /servers/getVersion.
-- MCP Inspector stdio connection.
+- MCP Inspector stdio connection, both browser mode and headless --cli mode.
 - tools/list.
 - search_ioc.
 - investigate_ioc.
 - summarize_event.
 - generate_ioc_report.
 - check_warninglists.
+- find_events_by_tag.
 - composite domain|ip matching from both IP and domain sides.
 - SHA256 lookup.
-- audit logging for success, validation failure, and blocked write attempts.
+- audit logging for success, validation failure, blocked write attempts, and MISP-side write
+  rejections (outcome=failed).
 - read-only write blocking with MISP unchanged after attempted write.
+- error paths: unreachable MISP_URL and invalid MISP_API_KEY both fail cleanly with no crash.
+- submit_ioc_with_approval, add_sighting_with_approval, tag_event_with_approval, and
+  publish_event_with_approval, including role-based publish blocking (analyst_write cannot
+  publish), tested against a dedicated sandbox event.
+
+Two real bugs were found and fixed during controlled-write validation:
+
+- A blank/whitespace AGENTIC_MISP_MCP_APPROVAL_TOKEN was treated as a configured token rather
+  than "unset," silently blocking all controlled writes. Now normalizes to unset.
+- tag_event_with_approval/publish_event_with_approval reported status="executed" even when MISP
+  itself rejected the operation (HTTP 200 with saved/published: false). Both now report a
+  distinct status="failed" with a matching outcome="failed" audit entry.
 
 Still pending:
 
-- controlled write execution validation.
+- propose_event/propose_attribute payload validation against a real MISP instance.
 - pivot edge cases.
-- warninglist edge cases.
-- large-event behavior.
-- broader MISP version compatibility.
+- warninglist edge cases and endpoint compatibility across MISP versions.
+- large event/result-set behavior.
+- rate-limit/timeout/TLS failure modes.
+- broader MISP version compatibility beyond 2.5.42.
+- final sign-off (docs/live-validation-plan.md section 9).
+
+This is lab validation evidence, not a production certification.
 
 ## Known limitation
 
@@ -217,3 +241,5 @@ When editing this repository:
 - Do not include secrets or private lab details in docs or tests.
 - Prefer generic examples in documentation.
 - Show diffs before committing.
+- Do not claim production readiness anywhere in docs. See production-readiness.md for the
+  current scope and acceptance criteria before making any production-status claim.

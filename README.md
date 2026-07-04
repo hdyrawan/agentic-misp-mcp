@@ -10,10 +10,11 @@ It exists because agents should not need unrestricted MISP API access to help wi
 
 - Early development; APIs, outputs, and internals may still change.
 - Mocked test coverage exists for core workflows and policy paths.
-- First live read-only lab validation has passed against MISP `2.5.42` using Docker, stdio transport, and MCP Inspector.
-- Controlled write validation has passed against the same lab (`AGENTIC_MISP_MCP_ENABLE_WRITE=true`, `analyst_write`/`curator` roles); two bugs found during that pass are fixed (see below).
-- Broader MISP version compatibility testing is still pending.
-- Not production-ready.
+- Live read-only lab validation has passed against MISP `2.5.42` using Docker, stdio transport, and MCP Inspector.
+- Core controlled-write validation has been performed in the same MISP lab (`submit_ioc_with_approval`, `add_sighting_with_approval`, `tag_event_with_approval`, `publish_event_with_approval`, plus role/policy blocking); two real bugs found during that pass are fixed (see below).
+- Edge-case validation and production-hardening checks remain pending: `propose_event`/`propose_attribute` payload validation, large event/result-set behavior, rate-limit/timeout/TLS failure modes, warninglist endpoint compatibility across MISP versions, broader MISP version compatibility, and final sign-off. See `docs/live-validation-plan.md`.
+- Production deployment is **not yet validated**. See [`docs/production-readiness.md`](docs/production-readiness.md) for the production-readiness scope, requirements, and acceptance criteria.
+- Not production-ready: validated in a lab, not production-certified.
 - Current MCP tool count: **19**.
 - Primary transport: **stdio**.
 - HTTP transport exists but is experimental.
@@ -385,6 +386,88 @@ anything but an isolated lab.
 
 See `docs/configuration.md` for more examples.
 
+## Production deployment
+
+**This project is not yet certified production-ready** — see
+[`docs/production-readiness.md`](docs/production-readiness.md) for the full scope, requirements,
+and the acceptance criteria that must pass before that changes. This section shows the
+conservative deployment shape for the one target that document is scoped against first:
+**read-only** investigation and reporting (`AGENTIC_MISP_MCP_ROLE=read_only`,
+`AGENTIC_MISP_MCP_ENABLE_WRITE=false`) over **stdio**, via Docker.
+
+1. **Build the image:**
+
+   ```bash
+   git clone https://github.com/hdyrawan/agentic-misp-mcp.git
+   cd agentic-misp-mcp
+   docker build -t agentic-misp-mcp:local .
+   ```
+
+2. **Configure a production env file outside the repository**, starting from the
+   production-oriented template (placeholders only — see
+   [`.env.production.example`](.env.production.example) for the full file with inline guidance):
+
+   ```bash
+   mkdir -p /path/to/agentic-misp-mcp-runtime/logs
+   cp .env.production.example /path/to/agentic-misp-mcp-runtime/.env
+   # edit /path/to/agentic-misp-mcp-runtime/.env — set MISP_URL and MISP_API_KEY;
+   # leave MISP_VERIFY_TLS=true, AGENTIC_MISP_MCP_ROLE=read_only,
+   # AGENTIC_MISP_MCP_ENABLE_WRITE=false, and AGENTIC_MISP_MCP_REQUIRE_APPROVAL=true as-is.
+   ```
+
+3. **Run `config-check`** before starting the server, every time the configuration changes:
+
+   ```bash
+   docker run --rm \
+     --env-file /path/to/agentic-misp-mcp-runtime/.env \
+     -v /path/to/agentic-misp-mcp-runtime/logs:/app/logs \
+     agentic-misp-mcp:local config-check
+   ```
+
+   This validates configuration and confirms the audit-log path is writable. It does not connect
+   to MISP.
+
+4. **Test MISP connectivity** before wiring up an MCP client, to confirm the deployment can
+   actually reach MISP with the configured TLS settings:
+
+   ```bash
+   docker run --rm \
+     --env-file /path/to/agentic-misp-mcp-runtime/.env \
+     --entrypoint python \
+     agentic-misp-mcp:local \
+     -c "import os, httpx; verify=os.environ.get('MISP_VERIFY_TLS','true').lower()=='true'; r=httpx.get(os.environ['MISP_URL'].rstrip('/') + '/servers/getVersion', headers={'Authorization': os.environ['MISP_API_KEY'], 'Accept':'application/json'}, verify=verify, timeout=10); print('STATUS:', r.status_code)"
+   ```
+
+   Expect `STATUS: 200`. A TLS or connection error here means fix the deployment's network/CA
+   configuration before proceeding — do not fall back to `MISP_VERIFY_TLS=false` to make this
+   pass; that setting is lab-only (see [`docs/production-readiness.md`](docs/production-readiness.md#tls-requirements)).
+
+5. **Run the server over stdio**, with the audit log directory mounted so logs persist across
+   container restarts:
+
+   ```bash
+   docker run --rm -i \
+     --env-file /path/to/agentic-misp-mcp-runtime/.env \
+     -v /path/to/agentic-misp-mcp-runtime/logs:/app/logs \
+     agentic-misp-mcp:local --transport stdio
+   ```
+
+   Point your MCP client at this same `docker run` invocation (see the Docker Quick start above
+   for an example client config) — the client, not this container, decides when to start/stop
+   the process, so there is no separate "daemon" to manage.
+
+**HTTP transport is not the default recommendation for production.** It is experimental, has no
+built-in authentication or TLS, and refuses to bind `0.0.0.0` unless
+`AGENTIC_MISP_MCP_ALLOW_INSECURE_HTTP_BIND=true` is explicitly set. If you use it in production at
+all, it must sit behind an authenticated, TLS-terminating gateway (reverse proxy or service mesh)
+that terminates TLS and enforces authentication before any traffic reaches this server — stdio
+remains the primary supported production transport.
+
+Before treating any deployment as production, review
+[`docs/production-readiness.md`](docs/production-readiness.md)'s Docker hardening checklist
+(read-only root filesystem, resource limits, base-image patching) and release/sign-off checklist
+in full — this section covers the conservative deployment shape, not the complete readiness bar.
+
 ## Security notes
 
 - Use stdio by default.
@@ -406,6 +489,7 @@ See `docs/configuration.md` for more examples.
 - [`docs/roles.md`](docs/roles.md) — `read_only` / `analyst_write` / `curator` / `admin` policy roles.
 - [`docs/approval-flow.md`](docs/approval-flow.md) — the `approved=false` → `pending_approval` → `approved=true` write flow, with examples.
 - [`docs/live-validation-plan.md`](docs/live-validation-plan.md) — live MISP validation checklist and remaining validation work.
+- [`docs/production-readiness.md`](docs/production-readiness.md) — production-readiness scope, requirements, and release/sign-off acceptance criteria.
 - [`docs/openapi-inventory.md`](docs/openapi-inventory.md) — sample MISP OpenAPI endpoint classification (planning only).
 
 ## Development
@@ -449,7 +533,7 @@ Two real bugs surfaced during that pass and are now fixed:
 
 ## Roadmap
 
-- Complete remaining live lab validation: pivot tools, warninglist edge cases, large-event behavior, and broader MISP version compatibility. (Error paths for unreachable `MISP_URL`/invalid `MISP_API_KEY`, and controlled writes, are now validated.)
+- Complete remaining live lab validation: `propose_event`/`propose_attribute` payload validation, warninglist edge cases, large event/result-set behavior, rate-limit/timeout/TLS failure modes, broader MISP version compatibility, and final sign-off (`docs/live-validation-plan.md` section 9). (Read-only tools, error paths for unreachable `MISP_URL`/invalid `MISP_API_KEY`, and the four `_with_approval` controlled-write tools are now validated.)
 - Add broader audit outcome tests for additional write tools and error paths.
 - Add stale-intel labeling or event-age weighting for historical OSINT context.
 - Compatibility notes for MISP version differences, especially warninglists and event shapes.
