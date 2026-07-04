@@ -75,7 +75,7 @@ Current status:
   Lab approval mode remains the default unless `AGENTIC_MISP_MCP_APPROVAL_MODE=production` is
   explicitly configured.
 
-Current tests: 146 passed.
+Current tests: 166 passed.
 Current MCP tool count: 19.
 Current license: MIT.
 
