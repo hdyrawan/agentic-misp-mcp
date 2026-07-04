@@ -21,6 +21,9 @@ Only these tools are exposed:
 - `extract_event_iocs`
 - `explain_event_context`
 - `find_events_by_tag`
+- `generate_event_report`
+- `generate_markdown_ioc_report`
+- `generate_markdown_event_report`
 
 All tools must be registered through `tools/registry.py` and audited through the shared audit wrapper.
 
@@ -39,10 +42,12 @@ Every MCP tool call writes one JSONL audit record, including failures. Audit rec
 ## Output limits
 
 All event- and IOC-oriented tools (`investigate_ioc`, `summarize_event`, `pivot_ioc`,
-`find_related_iocs`, `extract_event_iocs`, `explain_event_context`, `find_events_by_tag`)
-summarize MISP data and do not return full raw MISP event JSON. They respect
-`MISP_EVENT_ATTRIBUTE_LIMIT` and `MISP_RELATED_EVENT_LIMIT`, and each tool's own `limit`
-argument.
+`find_related_iocs`, `extract_event_iocs`, `explain_event_context`, `find_events_by_tag`,
+`generate_ioc_report`, `generate_event_report`, `generate_markdown_ioc_report`,
+`generate_markdown_event_report`) summarize MISP data and do not return full raw MISP event
+JSON. They respect `MISP_EVENT_ATTRIBUTE_LIMIT` and `MISP_RELATED_EVENT_LIMIT`, and each tool's
+own `limit` argument. The two Markdown report tools return deterministic, bounded text — no
+LLM call is made to generate them.
 
 ## Warninglist behavior
 

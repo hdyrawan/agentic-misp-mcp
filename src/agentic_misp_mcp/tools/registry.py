@@ -10,7 +10,14 @@ from agentic_misp_mcp.workflows.explain_event_context import explain_event_conte
 from agentic_misp_mcp.workflows.extract_event_iocs import extract_event_iocs_workflow
 from agentic_misp_mcp.workflows.find_events_by_tag import find_events_by_tag_workflow
 from agentic_misp_mcp.workflows.find_related_iocs import find_related_iocs_workflow
+from agentic_misp_mcp.workflows.generate_event_report import generate_event_report_workflow
 from agentic_misp_mcp.workflows.generate_ioc_report import generate_ioc_report_workflow
+from agentic_misp_mcp.workflows.generate_markdown_event_report import (
+    generate_markdown_event_report_workflow,
+)
+from agentic_misp_mcp.workflows.generate_markdown_ioc_report import (
+    generate_markdown_ioc_report_workflow,
+)
 from agentic_misp_mcp.workflows.investigate_ioc import investigate_ioc_workflow
 from agentic_misp_mcp.workflows.pivot_ioc import pivot_ioc_workflow
 from agentic_misp_mcp.workflows.search_ioc import search_ioc_workflow
@@ -27,6 +34,9 @@ ALLOWED_TOOL_NAMES = {
     "extract_event_iocs",
     "explain_event_context",
     "find_events_by_tag",
+    "generate_event_report",
+    "generate_markdown_ioc_report",
+    "generate_markdown_event_report",
 }
 
 
@@ -47,7 +57,7 @@ def register_tools(
     settings: Settings,
     audit_logger: AuditLogger,
 ) -> None:
-    """Register only approved v0.1/Phase 2/Phase 3 tools through the shared audit wrapper."""
+    """Register only approved v0.1-Phase 4 tools through the shared audit wrapper."""
 
     async def search_ioc(value: str, limit: int = 20) -> dict[str, object]:
         """Search MISP for an IOC and return normalized attribute matches."""
@@ -139,6 +149,33 @@ def register_tools(
             lambda: find_events_by_tag_workflow(client, settings, tag, limit),
         )
 
+    async def generate_event_report(event_id: int) -> dict[str, object]:
+        """Generate a deterministic, structured analyst report for a MISP event."""
+        return await audit_call(
+            audit_logger,
+            "generate_event_report",
+            {"event_id": event_id},
+            lambda: generate_event_report_workflow(client, settings, event_id),
+        )
+
+    async def generate_markdown_ioc_report(value: str) -> str:
+        """Generate a Markdown-formatted IOC report suitable for SOC documentation."""
+        return await audit_call(
+            audit_logger,
+            "generate_markdown_ioc_report",
+            {"value": value},
+            lambda: generate_markdown_ioc_report_workflow(client, settings, value),
+        )
+
+    async def generate_markdown_event_report(event_id: int) -> str:
+        """Generate a Markdown-formatted MISP event report suitable for SOC escalation."""
+        return await audit_call(
+            audit_logger,
+            "generate_markdown_event_report",
+            {"event_id": event_id},
+            lambda: generate_markdown_event_report_workflow(client, settings, event_id),
+        )
+
     _register(mcp, "search_ioc", search_ioc)
     _register(mcp, "investigate_ioc", investigate_ioc)
     _register(mcp, "summarize_event", summarize_event)
@@ -149,3 +186,6 @@ def register_tools(
     _register(mcp, "extract_event_iocs", extract_event_iocs)
     _register(mcp, "explain_event_context", explain_event_context)
     _register(mcp, "find_events_by_tag", find_events_by_tag)
+    _register(mcp, "generate_event_report", generate_event_report)
+    _register(mcp, "generate_markdown_ioc_report", generate_markdown_ioc_report)
+    _register(mcp, "generate_markdown_event_report", generate_markdown_event_report)

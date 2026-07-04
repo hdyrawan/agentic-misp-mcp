@@ -42,18 +42,37 @@ class FakeClient:
         return WarninglistCheckResult(status="available", hit=False)
 
 
+class NoMatchClient:
+    async def search_attributes(self, value, limit):
+        return []
+
+    async def get_event(self, event_id, attribute_limit):
+        raise AssertionError("get_event should not be called when there are no matches")
+
+    async def check_warninglists(self, value):
+        return WarninglistCheckResult(status="available", hit=False)
+
+
 @pytest.mark.asyncio
-async def test_generate_ioc_report_uses_stabilized_verdict_and_confidence_schema(settings):
+async def test_generate_ioc_report_matches_phase_4_schema(settings):
     result = await generate_ioc_report_workflow(FakeClient(), settings, "1.2.3.4")
 
+    assert result["report_type"] == "ioc_report"
     assert result["title"] == "IOC report: 1.2.3.4"
     assert result["verdict"] in VALID_VERDICTS
     assert result["confidence"] in VALID_CONFIDENCE
     assert result["verdict"] == "suspicious"
     assert result["confidence"] == "low"
-    assert isinstance(result["verdict_reason"], str) and result["verdict_reason"]
     assert result["confidence_score"] > 0
-    assert result["misp_findings"][0]["title"] == "MISP matches"
+    assert "Verdict" in result["key_findings"][0]
+    assert result["misp_findings"] == {
+        "match_count": 1,
+        "related_event_count": 1,
+        "related_ioc_count": 1,
+    }
+    assert result["warninglist_findings"]["status"] == "available"
+    assert result["warninglist_findings"]["hit"] is False
+    assert isinstance(result["warninglist_findings"]["detail"], str)
     assert result["context"]["possible_malware_families"] == ["test"]
     assert result["related_iocs"] == [
         {
@@ -68,3 +87,19 @@ async def test_generate_ioc_report_uses_stabilized_verdict_and_confidence_schema
         {"type": "event", "id": 1, "url": f"{settings.misp_base_url}/events/view/1"}
     ]
     assert "recommended_actions" in result
+    assert result["limitations"]
+    assert "Event" not in result
+    assert "raw" not in result
+
+
+@pytest.mark.asyncio
+async def test_generate_ioc_report_no_hit_notes_absence_in_limitations(settings):
+    result = await generate_ioc_report_workflow(NoMatchClient(), settings, "9.9.9.9")
+
+    assert result["verdict"] == "unknown"
+    assert result["misp_findings"] == {
+        "match_count": 0,
+        "related_event_count": 0,
+        "related_ioc_count": 0,
+    }
+    assert any("not found in MISP" in limitation for limitation in result["limitations"])
