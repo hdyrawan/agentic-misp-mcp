@@ -1,26 +1,48 @@
 # agentic-misp-mcp
 
-`agentic-misp-mcp` is an agentic MCP server for MISP. It exposes analyst-oriented threat intelligence workflows, not raw MISP API endpoints.
+`agentic-misp-mcp` is a read-only, workflow-first MCP server for MISP threat intelligence. It
+exposes analyst-oriented tools for investigating IOCs, pivoting across related indicators, and
+summarizing/explaining MISP events — it is **not** a raw MISP API proxy.
 
-## v0.1 scope
+## Project status
+
+- **Early development.** APIs, tool output shapes, and internals may still change.
+- Tested with **mocked MISP responses only**. Live MISP compatibility testing is pending.
+- No write/admin tools are implemented, and none are currently planned for this stage.
+- Not yet recommended for production use.
+
+## Scope
 
 - Python 3.11+
 - FastMCP
 - httpx
 - pydantic-settings
-- JSONL audit logging
+- JSONL audit logging for every MCP tool call
 - Docker support
 - Read-only by default
-- Five analyst workflow tools:
-  - `search_ioc(value: str, limit: int = 20)`
-  - `investigate_ioc(value: str, limit: int = 20)`
-  - `summarize_event(event_id: int)`
-  - `check_warninglists(value: str)`
-  - `generate_ioc_report(value: str)`
+- `MISP_API_KEY` is read only from environment variables — never accepted as a tool argument
+- TLS verification (`MISP_VERIFY_TLS`) is enabled by default
 
-## Non-goals for v0.1
+### MCP tools
 
-v0.1 does not implement event creation, attribute creation, sighting submission, tagging, publishing, raw MISP API proxying, shell execution, write/admin tools, or unrestricted filesystem access.
+10 analyst-oriented tools are currently exposed:
+
+- `search_ioc(value: str, limit: int = 20)`
+- `investigate_ioc(value: str, limit: int = 20)`
+- `summarize_event(event_id: int)`
+- `check_warninglists(value: str)`
+- `generate_ioc_report(value: str)`
+- `pivot_ioc(value: str, limit: int = 20)`
+- `find_related_iocs(value: str, limit: int = 20)`
+- `extract_event_iocs(event_id: int, limit: int = 100)`
+- `explain_event_context(event_id: int)`
+- `find_events_by_tag(tag: str, limit: int = 20)`
+
+## Non-goals
+
+This project does not implement event creation, attribute creation, sighting submission,
+tagging, publishing, raw MISP API proxying, shell execution, write/admin tools, or unrestricted
+filesystem access.
 
 ## Configuration
 

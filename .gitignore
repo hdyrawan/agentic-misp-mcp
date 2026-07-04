@@ -1,5 +1,11 @@
+# secrets
 .env
+.env.*
+!.env.example
+
+# Python
 .venv/
+.venv*/
 __pycache__/
 *.py[cod]
 .pytest_cache/
@@ -8,6 +14,23 @@ __pycache__/
 *.egg-info/
 dist/
 build/
-logs/
 coverage.xml
 htmlcov/
+
+# logs / audit
+logs/
+*.log
+audit.jsonl
+*.jsonl
+
+# local agent notes
+docs/handoff/
+*.local.md
+CLAUDE.local.md
+.hermes/
+.claude/
+
+# OS/editor
+.DS_Store
+.vscode/
+.idea/

@@ -1,6 +1,7 @@
 # Security model
 
-v0.1 is intentionally read-only and workflow-first.
+This project is intentionally read-only, workflow-first, and in early development. It has not
+been validated against a live MISP instance and should not be treated as production-ready.
 
 ## Read-only boundary
 
@@ -8,13 +9,18 @@ The server does not implement event creation, attribute creation, sighting submi
 
 ## MCP tool boundary
 
-Only these tools are exposed in v0.1:
+Only these tools are exposed:
 
 - `search_ioc`
 - `investigate_ioc`
 - `summarize_event`
 - `check_warninglists`
 - `generate_ioc_report`
+- `pivot_ioc`
+- `find_related_iocs`
+- `extract_event_iocs`
+- `explain_event_context`
+- `find_events_by_tag`
 
 All tools must be registered through `tools/registry.py` and audited through the shared audit wrapper.
 
@@ -32,8 +38,12 @@ Every MCP tool call writes one JSONL audit record, including failures. Audit rec
 
 ## Output limits
 
-`investigate_ioc()` and `summarize_event()` summarize MISP data and do not return full raw MISP event JSON. They respect `MISP_EVENT_ATTRIBUTE_LIMIT` and `MISP_RELATED_EVENT_LIMIT`.
+All event- and IOC-oriented tools (`investigate_ioc`, `summarize_event`, `pivot_ioc`,
+`find_related_iocs`, `extract_event_iocs`, `explain_event_context`, `find_events_by_tag`)
+summarize MISP data and do not return full raw MISP event JSON. They respect
+`MISP_EVENT_ATTRIBUTE_LIMIT` and `MISP_RELATED_EVENT_LIMIT`, and each tool's own `limit`
+argument.
 
 ## Warninglist behavior
 
-MISP warninglist endpoint behavior can vary between deployments and versions. v0.1 isolates this logic in `misp/warninglists.py`. If the warninglist check is unavailable or the response shape is not recognized, the tool returns a structured `not_available` state rather than pretending the check succeeded.
+MISP warninglist endpoint behavior can vary between deployments and versions. This project isolates this logic in `misp/warninglists.py`. If the warninglist check is unavailable or the response shape is not recognized, the tool returns a structured `not_available` state rather than pretending the check succeeded.
