@@ -33,10 +33,12 @@ Current status:
 - Phase 10 release-ready: repository hygiene, tracked-file inventory, sensitive-content scan,
   README/security/changelog/project-state review, version check, final quality gates, and Docker
   release-check validation completed for safe public GitHub publishing as an early-development
-  open-source project. No git tag has been created.
+  MIT-licensed open-source project. README has been rewritten for publish readiness, and
+  `llms.txt` has been added for LLM/coding-agent orientation. No git tag has been created.
 
 Current tests: 124 passed.
 Current MCP tool count: 19.
+Current license: MIT.
 
 Current MCP tools:
 1. search_ioc

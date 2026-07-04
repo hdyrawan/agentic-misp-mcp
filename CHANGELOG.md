@@ -11,8 +11,12 @@ live MISP compatibility testing is still pending.
 
 ### Changed
 
+- Switched project license metadata and `LICENSE` to MIT.
 - Prepared repository documentation for safe public GitHub publishing as an early-development
   open-source project.
+- Rewrote README with clearer positioning, safety model, grouped tool list, quick start,
+  example prompts, configuration table, roadmap, and contributing guidance.
+- Added `llms.txt` for LLM/coding-agent orientation.
 - Rechecked README, security policy, changelog, project state, packaging metadata, tracked-file
   hygiene, and sensitive-content scan results.
 
@@ -39,7 +43,7 @@ live MISP compatibility testing is still pending.
 
 - Documented CI, development commands, Docker secret handling, HTTP transport warnings, and Phase 8
   policy runtime guidance.
-- Confirmed packaging metadata, Python 3.11+ requirement, Apache-2.0 license metadata, CLI script,
+- Confirmed packaging metadata, Python 3.11+ requirement, MIT license metadata, CLI script,
   runtime dependencies, and dev optional dependencies without risky dependency changes.
 - Tightened `.dockerignore` hygiene while keeping Docker runtime behavior unchanged: credentials
   are still runtime-only, and the image continues to run as a non-root user.

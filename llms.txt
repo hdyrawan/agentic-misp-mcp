@@ -1,0 +1,93 @@
+# agentic-misp-mcp
+
+Purpose: workflow-first MCP server for MISP threat intelligence. It helps agents investigate IOCs, pivot through related indicators, summarize events, generate deterministic reports, and perform controlled write/proposal workflows behind policy and approval gates.
+
+Status:
+- Early development open-source project.
+- Version: 0.1.0.
+- License: MIT.
+- Tested with mocked MISP responses only.
+- Live MISP compatibility testing is pending.
+- Current MCP tool count: 19.
+
+Architecture summary:
+- CLI entrypoint: src/agentic_misp_mcp/cli.py
+- Server factory: src/agentic_misp_mcp/server.py
+- Tool registration boundary: src/agentic_misp_mcp/tools/registry.py
+- Shared audit wrapper: src/agentic_misp_mcp/audit.py
+- Runtime settings: src/agentic_misp_mcp/settings.py
+- MISP client: src/agentic_misp_mcp/misp/client.py
+- Policy engine: src/agentic_misp_mcp/policy/engine.py
+- Workflow implementations: src/agentic_misp_mcp/workflows/
+
+Hard safety rules:
+- Read-only by default.
+- Write disabled by default: AGENTIC_MISP_MCP_ENABLE_WRITE=false.
+- Approval required by default: AGENTIC_MISP_MCP_REQUIRE_APPROVAL=true.
+- MISP_API_KEY comes only from environment variables.
+- Every MCP tool must be registered through tools/registry.py.
+- Every MCP tool must go through the shared audit wrapper.
+- Tests must use mocked MISP responses unless a future task explicitly requests live lab validation.
+
+Current MCP tools:
+1. search_ioc
+2. investigate_ioc
+3. summarize_event
+4. check_warninglists
+5. generate_ioc_report
+6. pivot_ioc
+7. find_related_iocs
+8. extract_event_iocs
+9. explain_event_context
+10. find_events_by_tag
+11. generate_event_report
+12. generate_markdown_ioc_report
+13. generate_markdown_event_report
+14. propose_event
+15. propose_attribute
+16. submit_ioc_with_approval
+17. add_sighting_with_approval
+18. tag_event_with_approval
+19. publish_event_with_approval
+
+Environment variables:
+- MISP_URL: required MISP base URL.
+- MISP_API_KEY: required runtime-only MISP API key; never accept as a tool argument.
+- MISP_VERIFY_TLS: default true.
+- MISP_TIMEOUT_SECONDS: default 30.
+- MISP_DEFAULT_LIMIT: default 20.
+- MISP_MAX_LIMIT: default 100.
+- MISP_EVENT_ATTRIBUTE_LIMIT: default 50.
+- MISP_RELATED_EVENT_LIMIT: default 5.
+- AGENTIC_MISP_MCP_AUDIT_LOG_PATH: default ./logs/audit.jsonl.
+- AGENTIC_MISP_MCP_LOG_LEVEL: default INFO.
+- AGENTIC_MISP_MCP_ROLE: default read_only; allowed read_only, analyst_write, curator, admin.
+- AGENTIC_MISP_MCP_ENABLE_WRITE: default false.
+- AGENTIC_MISP_MCP_REQUIRE_APPROVAL: default true.
+
+Common development commands:
+- uv run --extra dev ruff check .
+- uv run --extra dev ruff format --check .
+- uv run --extra dev pytest -q
+- make check
+- docker build -t agentic-misp-mcp:local .
+- agentic-misp-mcp config-check
+- agentic-misp-mcp --transport stdio
+
+What not to do:
+- Do not add a raw MISP API proxy.
+- Do not add shell execution or unrestricted filesystem MCP tools.
+- Do not log secrets, authorization headers, API keys, tokens, or passwords.
+- Do not accept API keys, tokens, passwords, or authorization headers as MCP tool arguments.
+- Do not bypass policy evaluation.
+- Do not bypass audit logging.
+- Do not add write behavior without write-mode, role, and approval gates.
+- Do not expose live MISP tests in CI.
+- Do not connect Hermes runtime during repository tests.
+
+Recommended files to inspect first:
+- PROJECT_STATE.md
+- README.md
+- src/agentic_misp_mcp/tools/registry.py
+- src/agentic_misp_mcp/policy/engine.py
+- src/agentic_misp_mcp/workflows/

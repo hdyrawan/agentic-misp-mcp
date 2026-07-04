@@ -2,7 +2,7 @@
 
 ## Project status
 
-`agentic-misp-mcp` is in early development. It has been tested with mocked MISP responses only; live MISP compatibility testing and production security review are still pending. Do not treat the current branch or any `0.1.x` package as production-ready.
+`agentic-misp-mcp` is an MIT-licensed project in early development. It has been tested with mocked MISP responses only; live MISP compatibility testing and production security review are still pending. Do not treat the current branch or any `0.1.x` package as production-ready.
 
 ## Supported versions
 
