@@ -190,6 +190,67 @@ known indicator — and confirm you get a structured JSON result back. See "Test
 MISP lab" below for a deeper validation walkthrough (MCP Inspector, SSH tunneling, a read-only
 test checklist).
 
+## MCP client integration (Docker)
+
+This is the Docker-based `docker run` invocation from "Option B — Docker" above, wired into two
+specific MCP clients. Both were built and tested against this exact command during `v0.2.0` GA
+validation — Docker image built locally (`docker build -t agentic-misp-mcp:local .`), container
+confirmed reachable to a real MISP lab over the LAN, and both clients confirmed `tools/list`
+returns all 19 tools and a live `check_warninglists` call returns real MISP data.
+
+In both examples below, replace `/path/to/agentic-misp-mcp/.env` and `/path/to/logs` with your
+own paths (see "Option B — Docker" above for creating them) — never commit a real `.env` file or
+paste real credentials into a client config.
+
+### Claude Code
+
+Use the `claude mcp add` CLI rather than hand-writing JSON — it registers the server, spawns it,
+and confirms the connection in one step:
+
+```bash
+claude mcp add agentic-misp-mcp -s local -- \
+  docker run --rm -i \
+  --env-file /path/to/agentic-misp-mcp/.env \
+  -v /path/to/logs:/app/logs \
+  agentic-misp-mcp:local --transport stdio
+```
+
+- `-s local` scopes the server to you, in this project only, and is **not** committed to git
+  (unlike `-s project`, which writes a shared `.mcp.json` — do not use `-s project` here unless
+  every teammate has their own `.env` at that exact path, since the path is stored verbatim).
+- Verify: `claude mcp list` should show `agentic-misp-mcp ... ✔ Connected`, and `claude mcp get
+  agentic-misp-mcp` shows the full command. **Start a new Claude Code session** afterward — a
+  server added mid-session is connected immediately, but its tools only appear in a session
+  started after the `add`.
+- To remove: `claude mcp remove agentic-misp-mcp -s local`.
+- Prefer the CLI above; if you need the equivalent manual `.mcp.json` shape instead, see "Point
+  your MCP client at it" in "Option B — Docker".
+
+### Hermes
+
+Hermes uses its own `hermes mcp add` command, which performs a live discovery handshake against
+the server (spawns it, lists its tools, and prompts to enable them) before saving:
+
+```bash
+hermes mcp add agentic-misp-mcp \
+  --command docker \
+  --args run --rm -i \
+    --env-file /path/to/agentic-misp-mcp/.env \
+    -v /path/to/logs:/app/logs \
+    agentic-misp-mcp:local --transport stdio
+```
+
+- Answer `y` at the "Enable all 19 tools?" prompt (or run non-interactively with `echo y | hermes
+  mcp add ...`) to enable the full tool set; use `select` instead of `y` to enable only a subset
+  (for example, a read-only Hermes profile might enable everything except the six
+  `_with_approval`/`propose_*` write tools).
+- Verify: `hermes mcp list` should show `agentic-misp-mcp ... ✓ enabled`, and `hermes mcp test
+  agentic-misp-mcp` re-runs the discovery handshake and lists all 19 tools. **Start a new Hermes
+  session** afterward for the tools to be available in chat.
+- To remove: `hermes mcp remove agentic-misp-mcp`.
+- This writes into `~/.hermes/config.yaml`'s `mcp_servers.agentic-misp-mcp` block; back that file
+  up first if you're editing it by hand instead of via the CLI.
+
 ## Live lab validation status
 
 The first live validation was performed against a controlled, non-production MISP lab. For the
