@@ -2,7 +2,7 @@
 
 `agentic-misp-mcp` is configured entirely through environment variables. Run
 `agentic-misp-mcp config-check` before starting the MCP server to validate local runtime
-configuration without connecting to MISP.
+configuration without connecting to MISP. The project is distributed under the MIT License.
 
 | Variable | Required | Default | Description |
 | --- | --- | --- | --- |

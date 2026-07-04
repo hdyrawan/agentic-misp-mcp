@@ -1,112 +1,167 @@
 # agentic-misp-mcp
 
-`agentic-misp-mcp` is a workflow-first MCP server for MISP threat intelligence. It exposes
-analyst-oriented tools for investigating IOCs, pivoting across related indicators,
-summarizing/explaining MISP events, and — behind a policy/approval gate that is disabled by
-default — proposing and submitting controlled writes. It is **not** a raw MISP API proxy.
+**MISP workflows for agents — investigate, pivot, report, and propose controlled writes without turning your MCP server into a raw API proxy.**
 
-## Project status
+`agentic-misp-mcp` is an early-stage MCP server for security analysts working with MISP threat intelligence. It gives AI agents a small set of analyst-oriented workflows: search an IOC, investigate context, pivot through related indicators, summarize events, generate reports, and prepare tightly controlled write proposals.
 
-- **Early development.** APIs, tool output shapes, and internals may still change.
-- Tested with **mocked MISP responses only**. Live MISP compatibility testing is pending.
-- Write tools exist but are disabled by default (`AGENTIC_MISP_MCP_ENABLE_WRITE=false`) and are
-  policy/approval-gated when enabled; approval is required by default
-  (`AGENTIC_MISP_MCP_REQUIRE_APPROVAL=true`). No generic admin tools or raw API proxy are
-  implemented.
-- Not yet recommended for production use.
-- CI runs lint, format checks, and the mocked test suite on Python 3.11 and 3.12.
+It exists because agents should not need unrestricted MISP API access to help with SOC work. Instead of exposing every endpoint, this project exposes opinionated workflows with bounded output, policy checks, and audit logging.
 
-## Scope
+## Status
 
-- Python 3.11+
-- FastMCP
-- httpx
-- pydantic-settings
-- JSONL audit logging for every MCP tool call, including policy decisions
-- Docker support
-- Read-only by default; controlled write requires explicit configuration
-- `MISP_API_KEY` is read only from environment variables — never accepted as a tool argument
-- TLS verification (`MISP_VERIFY_TLS`) is enabled by default
+- Early development; APIs, outputs, and internals may still change.
+- Tested with mocked MISP responses only.
+- Live MISP compatibility testing is pending.
+- Current MCP tool count: **19**.
+- Primary transport: **stdio**.
+- HTTP transport exists but is experimental.
+- License: MIT.
 
-### MCP tools
+## Safety model
 
-19 analyst-oriented tools are currently exposed.
+This project is workflow-first, not endpoint-first.
 
-13 read-only tools:
+- Read-only by default.
+- Controlled write tools exist but are disabled by default: `AGENTIC_MISP_MCP_ENABLE_WRITE=false`.
+- Approval is required by default when writes are enabled: `AGENTIC_MISP_MCP_REQUIRE_APPROVAL=true`.
+- `MISP_API_KEY` is loaded only from environment variables.
+- No API key, token, password, authorization header, or secret passthrough through MCP tool arguments.
+- No raw MISP API proxy.
+- No generic user/organisation/server/settings admin tools.
+- No shell execution or unrestricted filesystem tools.
+- Every MCP tool call is audited with sanitized arguments and policy decision fields.
 
-- `search_ioc(value: str, limit: int = 20)`
-- `investigate_ioc(value: str, limit: int = 20)`
-- `summarize_event(event_id: int)`
-- `check_warninglists(value: str)`
-- `generate_ioc_report(value: str)`
-- `pivot_ioc(value: str, limit: int = 20)`
-- `find_related_iocs(value: str, limit: int = 20)`
-- `extract_event_iocs(event_id: int, limit: int = 100)`
-- `explain_event_context(event_id: int)`
-- `find_events_by_tag(tag: str, limit: int = 20)`
-- `generate_event_report(event_id: int)`
-- `generate_markdown_ioc_report(value: str)`
-- `generate_markdown_event_report(event_id: int)`
+## Current MCP tools
 
-6 controlled write tools (Phase 8), disabled by default and policy/approval-gated:
+### Read-only investigation
 
-- `propose_event(...)` — builds an event creation proposal; never writes to MISP
-- `propose_attribute(...)` — builds an attribute creation proposal; never writes to MISP
-- `submit_ioc_with_approval(..., approved: bool = False)`
-- `add_sighting_with_approval(..., approved: bool = False)`
-- `tag_event_with_approval(event_id: int, tag: str, approved: bool = False)`
-- `publish_event_with_approval(event_id: int, approved: bool = False)` — requires `curator`/`admin` role
+- `search_ioc(value, limit=20)` — find normalized MISP attribute matches.
+- `investigate_ioc(value, limit=20)` — combine matches, warninglists, related events, scoring, and next steps.
+- `summarize_event(event_id)` — summarize a MISP event without returning full raw event JSON.
+- `check_warninglists(value)` — check an IOC against warninglists when available.
 
-See [`docs/security.md`](docs/security.md) for the full write-behavior contract (blocked /
-pending_approval / executed).
+### Pivoting and event intelligence
 
-## Non-goals
+- `pivot_ioc(value, limit=20)` — pivot from one IOC into useful related context.
+- `find_related_iocs(value, limit=20)` — rank related indicators.
+- `extract_event_iocs(event_id, limit=100)` — extract supported IOC types from an event.
+- `explain_event_context(event_id)` — explain what an event appears to represent.
+- `find_events_by_tag(tag, limit=20)` — find events associated with a tag.
 
-This project does not implement raw MISP API proxying, shell execution, unrestricted filesystem
-access, or generic user/organisation/server/settings-style admin tools. Event/attribute
-creation, sighting submission, tagging, and publishing exist only as the six narrow, disabled-
-by-default, policy/approval-gated tools listed above — never as a general write API.
+### Reporting
+
+- `generate_ioc_report(value)` — deterministic structured IOC report.
+- `generate_event_report(event_id)` — deterministic structured event report.
+- `generate_markdown_ioc_report(value)` — Markdown IOC report for analyst notes or escalation.
+- `generate_markdown_event_report(event_id)` — Markdown event report.
+
+### Controlled write and proposal tools
+
+These six tools are policy-gated. They are blocked unless write mode and role allow the action; write execution also requires explicit approval by default.
+
+- `propose_event(...)` — build an event creation proposal; never writes to MISP.
+- `propose_attribute(...)` — build an attribute creation proposal; never writes to MISP.
+- `submit_ioc_with_approval(..., approved=False)` — add an attribute only when policy and approval allow.
+- `add_sighting_with_approval(..., approved=False)` — add a sighting only when policy and approval allow.
+- `tag_event_with_approval(event_id, tag, approved=False)` — tag an event only when policy and approval allow.
+- `publish_event_with_approval(event_id, approved=False)` — publish an event only for curator/admin roles and approval.
+
+Write-tool results are explicit: `blocked`, `pending_approval`, or `executed`. There are no silent writes.
+
+## Quick start
+
+### Local install
+
+```bash
+python -m pip install -e ".[dev]"
+```
+
+Or, if you use `uv` for development:
+
+```bash
+uv run --extra dev agentic-misp-mcp --help
+```
+
+### Configure `.env`
+
+```bash
+cp .env.example .env
+# edit .env with your local runtime values
+```
+
+Minimum required variables:
+
+```env
+MISP_URL=https://misp.example.local
+MISP_API_KEY=your_misp_api_key_here
+```
+
+Do not commit `.env` or real API keys.
+
+### Validate configuration
+
+```bash
+agentic-misp-mcp config-check
+```
+
+`config-check` does not connect to MISP and redacts the API key.
+
+### Run over stdio
+
+```bash
+agentic-misp-mcp --transport stdio
+```
+
+### Docker run
+
+```bash
+docker build -t agentic-misp-mcp:local .
+docker run --rm \
+  -e MISP_URL=https://misp.example.local \
+  -e MISP_API_KEY=your_misp_api_key_here \
+  agentic-misp-mcp:local config-check
+
+docker run --rm -i --env-file .env -v "$PWD/logs:/app/logs" \
+  agentic-misp-mcp:local --transport stdio
+```
+
+Do not bake secrets into the image. Pass credentials only at runtime.
+
+## Example agent prompts
+
+- "Investigate this IOC: `1.2.3.4`. Give me verdict, confidence, related events, and next steps."
+- "Pivot from this domain and list related IOCs worth hunting: `example.test`."
+- "Summarize MISP event `42` for a SOC handoff."
+- "Generate a Markdown IOC report for `http://evil.example.test/x`."
+- "Propose a MISP event for this phishing cluster, but do not write it yet."
+- "Submit this IOC to event `42` with approval after showing the pending approval payload."
 
 ## Configuration
 
-Set configuration with environment variables. See `.env.example` and `docs/configuration.md`.
+| Variable | Required | Default | Notes |
+| --- | --- | --- | --- |
+| `MISP_URL` | Yes | none | Base URL for MISP, for example `https://misp.example.local`. |
+| `MISP_API_KEY` | Yes | none | Runtime-only MISP automation/API key. Never pass as a tool argument. |
+| `MISP_VERIFY_TLS` | No | `true` | Keep TLS verification enabled. |
+| `MISP_TIMEOUT_SECONDS` | No | `30` | HTTP timeout, > 0 and <= 300. |
+| `MISP_DEFAULT_LIMIT` | No | `20` | Default result limit. |
+| `MISP_MAX_LIMIT` | No | `100` | Maximum accepted result limit. |
+| `MISP_EVENT_ATTRIBUTE_LIMIT` | No | `50` | Attribute cap for event summaries/investigations. |
+| `MISP_RELATED_EVENT_LIMIT` | No | `5` | Related event expansion cap. |
+| `AGENTIC_MISP_MCP_AUDIT_LOG_PATH` | No | `./logs/audit.jsonl` | JSONL audit log path. |
+| `AGENTIC_MISP_MCP_LOG_LEVEL` | No | `INFO` | Application log level. |
+| `AGENTIC_MISP_MCP_ROLE` | No | `read_only` | `read_only`, `analyst_write`, `curator`, or `admin`. |
+| `AGENTIC_MISP_MCP_ENABLE_WRITE` | No | `false` | Global write-mode gate. |
+| `AGENTIC_MISP_MCP_REQUIRE_APPROVAL` | No | `true` | Require explicit `approved=true` for write execution. |
 
-Required:
+See `docs/configuration.md` for more examples.
 
-- `MISP_URL`
-- `MISP_API_KEY`
+## Security notes
 
-Safe defaults:
-
-- `MISP_VERIFY_TLS=true`
-- `MISP_TIMEOUT_SECONDS=30`
-- `MISP_DEFAULT_LIMIT=20`
-- `MISP_MAX_LIMIT=100`
-- `MISP_EVENT_ATTRIBUTE_LIMIT=50`
-- `MISP_RELATED_EVENT_LIMIT=5`
-- `AGENTIC_MISP_MCP_AUDIT_LOG_PATH=./logs/audit.jsonl`
-- `AGENTIC_MISP_MCP_LOG_LEVEL=INFO`
-- `AGENTIC_MISP_MCP_ROLE=read_only`
-- `AGENTIC_MISP_MCP_ENABLE_WRITE=false`
-- `AGENTIC_MISP_MCP_REQUIRE_APPROVAL=true`
-
-## CLI
-
-```bash
-agentic-misp-mcp --help
-agentic-misp-mcp --version
-agentic-misp-mcp config-check
-agentic-misp-mcp --transport stdio
-agentic-misp-mcp --transport http --host 0.0.0.0 --port 8000
-agentic-misp-mcp openapi-inventory --input <misp-openapi.json> --output docs/openapi-inventory.md
-```
-
-`config-check` validates environment configuration without connecting to MISP and never prints
-`MISP_API_KEY`. `--transport http` is experimental and depends on the installed FastMCP runtime;
-stdio is the primary supported transport. `openapi-inventory` classifies a MISP OpenAPI spec
-(JSON only) into a read/write/admin/sync/dangerous risk inventory for internal planning — it
-does not expose any MISP API endpoint as an MCP tool or call MISP; see
-[`docs/openapi-inventory.md`](docs/openapi-inventory.md) for a generated sample.
+- Use stdio by default.
+- Treat HTTP transport as experimental. If you enable it, bind only to a trusted interface or place it behind authenticated TLS termination.
+- Keep `.env`, audit logs, and API keys out of git.
+- Tests use mocked MISP responses only; do not add live-MISP tests without an explicit lab-validation phase.
+- See `SECURITY.md` and `docs/security.md` for reporting and deployment guidance.
 
 ## Development
 
@@ -116,7 +171,7 @@ uv run --extra dev ruff format --check .
 uv run --extra dev pytest -q
 ```
 
-Equivalent Makefile targets are available:
+Equivalent Make targets:
 
 ```bash
 make lint
@@ -125,39 +180,15 @@ make test
 make check
 ```
 
-The test suite uses mocked MISP responses only. Do not point tests at a live MISP instance, and
-do not add tests that require live credentials or network access to MISP.
+CI runs the same checks on Python 3.11 and 3.12.
 
-## Docker
+## Roadmap
 
-```bash
-docker build -t agentic-misp-mcp:local .
-docker run --rm --env-file .env -v "$PWD/logs:/app/logs" agentic-misp-mcp:local config-check
-docker run --rm --env-file .env agentic-misp-mcp:local --transport stdio
-```
+- Live lab validation against a controlled non-production MISP instance.
+- Compatibility notes for MISP version differences, especially warninglists and event shapes.
+- Release tagging and packaging once the live validation story is documented.
+- Additional controlled workflows only when they preserve the no-raw-proxy, policy-gated model.
 
-Docker Compose example:
+## Contributing
 
-```bash
-cp .env.example .env
-# edit .env with MISP_URL=https://misp.example.local and MISP_API_KEY=your_misp_api_key_here
-docker compose -f docker-compose.example.yml run --rm agentic-misp-mcp config-check
-docker compose -f docker-compose.example.yml run --rm agentic-misp-mcp
-```
-
-Do not bake MISP credentials into the image. Use `.env` only as a runtime env file and do not
-commit it. The Dockerfile installs the package into the image and runs the CLI as a non-root
-runtime user; pass `MISP_URL` and `MISP_API_KEY` only at container run time.
-
-## CI
-
-GitHub Actions configuration lives in `.github/workflows/ci.yml` and runs the same quality gate
-expected before merging changes:
-
-```bash
-uv run --extra dev ruff check .
-uv run --extra dev ruff format --check .
-uv run --extra dev pytest -q
-```
-
-CI does not connect to MISP and must not be configured with real MISP credentials.
+Contributions are welcome, but keep the project boundary intact: no raw API proxy, no secret passthrough, no unaudited tool path, and no write behavior without policy and approval gates. Start by reading `PROJECT_STATE.md`, `docs/security.md`, and `src/agentic_misp_mcp/tools/registry.py`.

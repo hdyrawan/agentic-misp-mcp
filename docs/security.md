@@ -1,6 +1,6 @@
 # Security model
 
-This project is intentionally workflow-first and in early development. It has not been
+This MIT-licensed project is intentionally workflow-first and in early development. It has not been
 validated against a live MISP instance and should not be treated as production-ready.
 
 ## Read-only by default; controlled write behind policy and approval
