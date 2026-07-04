@@ -7,6 +7,18 @@ live MISP compatibility testing is still pending.
 
 ## Unreleased
 
+### MCP Inspector CLI live validation (2026-07-04)
+
+- Ran a CLI-mode (non-browser) MCP Inspector integration pass against a live, non-production
+  MISP `2.5.42` lab: `tools/list`, live `search_ioc` / `find_events_by_tag` calls, a policy-blocking
+  check on `submit_ioc_with_approval`, and error-path checks for an unreachable `MISP_URL` and an
+  invalid `MISP_API_KEY`.
+- Confirmed audit records match the documented semantics exactly: blocked writes log
+  `success: false` / `outcome: "blocked"`; runtime failures (bad URL, bad key) log
+  `outcome: "error"` with no secret material in `error_message`.
+- No source changes were required; no bugs found. Controlled write tools and broader MISP
+  version compatibility remain the only pending items before wider production use.
+
 ### Fixed
 
 - Fixed audit records for blocked policy decisions (for example a write attempted while

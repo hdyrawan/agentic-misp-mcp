@@ -1,9 +1,10 @@
 # Live MISP lab validation plan
 
-This is a checklist for the first live validation of `agentic-misp-mcp` against a real,
-non-production MISP instance. **No live validation has been performed yet** — this document is
-the plan, not a report. Do not run any of the controlled write checklist items against a shared
-or production MISP instance.
+This is a checklist for live validation of `agentic-misp-mcp` against a real, non-production
+MISP instance. This document is the plan and running checklist, not a full report — see
+`README.md`'s "Live lab validation status" table for a summary of what has passed so far. Read-only
+and policy-blocking items have been validated in stages; controlled writes remain unvalidated. Do
+not run any of the controlled write checklist items against a shared or production MISP instance.
 
 See [`docs/testing.md`](testing.md) for what the mocked test suite already covers, and
 [`docs/roles.md`](roles.md) / [`docs/approval-flow.md`](approval-flow.md) for the policy and
@@ -71,7 +72,8 @@ For each checklist item below, record:
 - [ ] `find_related_iocs` — confirm ranking and limit behavior against real related-IOC volume.
 - [ ] `extract_event_iocs` against an event with a mix of supported/unsupported attribute types.
 - [ ] `explain_event_context` against a tagged event (galaxy/threat-actor tags if available).
-- [ ] `find_events_by_tag` against a real, non-trivial tag.
+- [x] `find_events_by_tag` against a real, non-trivial tag. Validated 2026-07-04 via MCP
+      Inspector CLI against the lab, tag `OSINT`, returning 3 real events.
 
 ## 5. Large event / result-set testing
 
@@ -93,10 +95,14 @@ are exercised against something real.
       clear `MISPRateLimitError`-driven failure, not a hang or a silent empty result.
 - [ ] Set `MISP_TIMEOUT_SECONDS` low enough to trigger a real timeout against a slow/large
       request; confirm a clean, informative error rather than a crash.
-- [ ] Point `MISP_URL` at a wrong/unreachable host temporarily; confirm a clean connection-error
-      message.
-- [ ] Test with an invalid/revoked API key; confirm `MISPAuthenticationError` behavior matches
-      the mocked `401`/`403` expectations.
+- [x] Point `MISP_URL` at a wrong/unreachable host temporarily; confirm a clean connection-error
+      message. Validated 2026-07-04 via MCP Inspector CLI: `search_ioc` returned `isError: true`
+      with a clean `ConnectError` message, no crash; audit log recorded `outcome=error`,
+      `error_type=MISPClientError`.
+- [x] Test with an invalid/revoked API key; confirm `MISPAuthenticationError` behavior matches
+      the mocked `401`/`403` expectations. Validated 2026-07-04 via MCP Inspector CLI: `search_ioc`
+      returned a clean authentication error with no key echoed; audit log recorded
+      `outcome=error`, `error_type=MISPAuthenticationError`.
 - [ ] If feasible, test against a MISP TLS endpoint with an untrusted certificate with
       `MISP_VERIFY_TLS=true` (should fail closed) and document that `MISP_VERIFY_TLS=false` is
       lab-only and never for production.

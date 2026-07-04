@@ -36,8 +36,12 @@ The first live validation was performed against a controlled, non-production MIS
 | `summarize_event` | Passed | Summarized a real MISP event without returning unbounded raw event JSON. |
 | `generate_ioc_report` | Passed | Generated a deterministic IOC report from live MISP data. |
 | `check_warninglists` | Passed | Warninglist checks returned structured results when available. |
+| `find_events_by_tag` | Passed | Returned real events for a live tag (`OSINT`), including info, date, threat level, and tags. |
 | Audit logging | Passed | Successful calls, validation failures, runtime errors, and blocked write attempts were written to JSONL audit logs. Blocked policy decisions are recorded with `allowed=false`, `success=false`, and `outcome=blocked`. |
 | Read-only write blocking | Passed | A write attempt with `approved=true` was blocked in `read_only` mode while write mode was disabled; follow-up search confirmed MISP was not modified. |
+| Error path: unreachable `MISP_URL` | Passed | Returned a clean connection error (`isError: true`) with no crash; audit log recorded `outcome=error` and `error_type=MISPClientError`. |
+| Error path: invalid `MISP_API_KEY` | Passed | Returned a clean authentication error with no crash and no key echoed; audit log recorded `outcome=error` and `error_type=MISPAuthenticationError`. |
+| MCP Inspector CLI mode | Passed | `tools/list` and `tools/call` verified via `--cli` mode (non-browser) against `uv run agentic-misp-mcp` over stdio. |
 | Controlled writes | Pending | Must be validated separately with `AGENTIC_MISP_MCP_ENABLE_WRITE=true` against an isolated lab only. |
 | Production deployment | Not validated | This project remains lab-tested, not production-certified. |
 
@@ -426,7 +430,7 @@ against an isolated lab MISP instance with `AGENTIC_MISP_MCP_ENABLE_WRITE=true`.
 
 ## Roadmap
 
-- Complete remaining live lab validation: pivot tools, warninglist edge cases, large-event behavior, error paths, controlled writes, and broader MISP version compatibility.
+- Complete remaining live lab validation: pivot tools, warninglist edge cases, large-event behavior, controlled writes, and broader MISP version compatibility. (Error paths for unreachable `MISP_URL` and invalid `MISP_API_KEY` are now validated.)
 - Add broader audit outcome tests for additional write tools and error paths.
 - Add stale-intel labeling or event-age weighting for historical OSINT context.
 - Compatibility notes for MISP version differences, especially warninglists and event shapes.
