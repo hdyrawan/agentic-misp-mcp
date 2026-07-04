@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-import stat
+import os
+import sqlite3
 import sys
 import tempfile
 from dataclasses import dataclass, field
@@ -9,7 +10,7 @@ from pathlib import Path
 from pydantic import ValidationError
 
 from agentic_misp_mcp.config_check import format_validation_error_lines, validate_audit_log_path
-from agentic_misp_mcp.policy.approval_store import ApprovalStoreError, SqliteApprovalStore
+from agentic_misp_mcp.security.permissions import unsafe_permissions_reason
 from agentic_misp_mcp.settings import Settings
 
 LONG_APPROVAL_TTL_SECONDS = 14_400  # 4 hours; longer widens the operator review/replay window.
@@ -122,6 +123,14 @@ def _check_publish(settings: Settings, result: ConfigDoctorResult) -> None:
 
 
 def _check_approval_store(settings: Settings, result: ConfigDoctorResult) -> None:
+    """Validate the approval store path without creating or modifying anything on disk.
+
+    Deliberately does not construct a `SqliteApprovalStore` — that constructor creates the
+    parent directory and an empty database as a side effect, which a read-only diagnostic
+    command must not do. Checks permissions, then (if the file exists) opens it read-only to
+    confirm it is a usable SQLite database, catching `sqlite3.Error` broadly so a corrupted or
+    non-database file at the configured path produces a clean FAIL instead of a crash.
+    """
     if settings.approval_mode != "production":
         result.checks.append(
             DoctorCheck(
@@ -129,13 +138,37 @@ def _check_approval_store(settings: Settings, result: ConfigDoctorResult) -> Non
             )
         )
         return
-    try:
-        SqliteApprovalStore(settings.approval_store_path)
-    except (ApprovalStoreError, OSError) as exc:
+    path = settings.approval_store_path.expanduser()
+    reason = unsafe_permissions_reason(path, check_group=True)
+    if reason:
+        result.checks.append(
+            DoctorCheck("FAIL", f"AGENTIC_MISP_MCP_APPROVAL_STORE_PATH is unsafe: {reason}")
+        )
+        return
+    if path.exists():
+        try:
+            connection = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
+            try:
+                # A trivial constant query like `SELECT 1` never touches the database file's
+                # schema, so it would not detect a corrupt/non-SQLite file at this path.
+                # Reading sqlite_master forces SQLite to actually parse the file header/schema.
+                connection.execute("SELECT count(*) FROM sqlite_master")
+            finally:
+                connection.close()
+        except sqlite3.Error as exc:
+            result.checks.append(
+                DoctorCheck(
+                    "FAIL",
+                    f"AGENTIC_MISP_MCP_APPROVAL_STORE_PATH is not a usable SQLite database: {exc}",
+                )
+            )
+            return
+    elif not os.access((ancestor := _nearest_existing_ancestor(path)), os.W_OK):
         result.checks.append(
             DoctorCheck(
                 "FAIL",
-                f"AGENTIC_MISP_MCP_APPROVAL_STORE_PATH is unusable in production mode: {exc}",
+                "AGENTIC_MISP_MCP_APPROVAL_STORE_PATH does not exist yet and its nearest "
+                f"existing ancestor directory is not writable: {ancestor}",
             )
         )
         return
@@ -147,6 +180,13 @@ def _check_approval_store(settings: Settings, result: ConfigDoctorResult) -> Non
     )
 
 
+def _nearest_existing_ancestor(path: Path) -> Path:
+    ancestor = path
+    while not ancestor.exists() and ancestor != ancestor.parent:
+        ancestor = ancestor.parent
+    return ancestor
+
+
 def _check_audit_log(settings: Settings, result: ConfigDoctorResult) -> None:
     error = validate_audit_log_path(settings.audit_log_path)
     if error:
@@ -154,7 +194,7 @@ def _check_audit_log(settings: Settings, result: ConfigDoctorResult) -> None:
             DoctorCheck("FAIL", f"AGENTIC_MISP_MCP_AUDIT_LOG_PATH is unusable: {error}")
         )
         return
-    unsafe = _unsafe_permissions_reason(settings.audit_log_path, check_group=False)
+    unsafe = unsafe_permissions_reason(settings.audit_log_path, check_group=False)
     if unsafe:
         result.checks.append(
             DoctorCheck("FAIL", f"AGENTIC_MISP_MCP_AUDIT_LOG_PATH is unsafe: {unsafe}")
@@ -259,31 +299,17 @@ def _check_approval_token(settings: Settings, result: ConfigDoctorResult) -> Non
 
 
 def _looks_like_temp_path(path: Path) -> bool:
-    resolved = str(path.expanduser())
-    return any(resolved.startswith(prefix) for prefix in TEMP_PATH_PREFIXES)
+    """Return True when `path` is under one of `TEMP_PATH_PREFIXES`.
 
-
-def _unsafe_permissions_reason(path: Path, *, check_group: bool = True) -> str | None:
-    """Flag world-writable paths as unsafe; group-writable only when `check_group` is set.
-
-    Group-writable is common (and often intentional, for a shared service group) for audit
-    log directories under a typical non-zero umask, so only the audit log check treats it as
-    advisory rather than unsafe. The approval store is a stricter HITL security boundary and
-    always checks group-writability too (see `policy/approval_store.py`).
+    Compares path components (via `Path.parents`), not raw string prefixes, so a sibling
+    directory that merely shares a string prefix (e.g. `/tmporary-data`) is not misclassified
+    as living under `/tmp`.
     """
-    bits = (stat.S_IWGRP | stat.S_IWOTH) if check_group else stat.S_IWOTH
-    descriptor = "group/world" if check_group else "world"
     resolved = path.expanduser()
-    parent = resolved.parent
-    if parent.exists():
-        parent_mode = stat.S_IMODE(parent.stat().st_mode)
-        if parent_mode & bits:
-            return f"parent directory is {descriptor} writable: {parent}"
-    if resolved.exists():
-        mode = stat.S_IMODE(resolved.stat().st_mode)
-        if mode & bits:
-            return f"file is {descriptor} writable: {resolved}"
-    return None
+    return any(
+        resolved == Path(prefix) or Path(prefix) in resolved.parents
+        for prefix in TEMP_PATH_PREFIXES
+    )
 
 
 def run_config_doctor_cli() -> int:
@@ -296,4 +322,6 @@ def run_config_doctor_cli() -> int:
     result = run_config_doctor(settings)
     stream = sys.stderr if result.has_failures else sys.stdout
     stream.write(result.render())
-    return 1 if result.has_failures else 0
+    # Match config-check's exit-code convention (0 ok, 2 configuration is bad) so a pipeline
+    # gate written for one command behaves the same for the other.
+    return 2 if result.has_failures else 0

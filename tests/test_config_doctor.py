@@ -115,6 +115,46 @@ def test_doctor_skips_approval_store_check_in_lab_mode(monkeypatch, tmp_path):
     assert not result.has_failures
 
 
+def test_doctor_approval_store_check_does_not_create_store_file(monkeypatch, tmp_path):
+    """config doctor must be safe to run against a not-yet-provisioned path: it should never
+    create the approval-store directory or database as a side effect of checking it."""
+    _valid_env(monkeypatch, tmp_path)
+    monkeypatch.setenv("AGENTIC_MISP_MCP_APPROVAL_MODE", "production")
+    store_dir = tmp_path / "approvals"
+    store_path = store_dir / "approvals.sqlite3"
+    monkeypatch.setenv("AGENTIC_MISP_MCP_APPROVAL_STORE_PATH", str(store_path))
+
+    result = run_config_doctor(Settings())
+
+    assert not result.has_failures
+    assert not store_dir.exists()
+    assert not store_path.exists()
+
+
+def test_doctor_fail_corrupted_approval_store_file_does_not_crash(monkeypatch, tmp_path):
+    """Regression test: a non-SQLite file at the configured approval-store path must produce
+    a clean FAIL, not an uncaught sqlite3.DatabaseError crash.
+
+    Explicitly chmod 0600 so the permission check passes and the check under test actually
+    reaches the read-only SQLite-validity check, rather than failing for the unrelated
+    (also-valid) reason of unsafe permissions under a group-writable default umask.
+    """
+    _valid_env(monkeypatch, tmp_path)
+    monkeypatch.setenv("AGENTIC_MISP_MCP_APPROVAL_MODE", "production")
+    store_path = tmp_path / "approvals.sqlite3"
+    store_path.write_text("not a sqlite database", encoding="utf-8")
+    os.chmod(store_path, 0o600)
+    monkeypatch.setenv("AGENTIC_MISP_MCP_APPROVAL_STORE_PATH", str(store_path))
+
+    result = run_config_doctor(Settings())
+
+    assert result.has_failures
+    assert any(
+        check.level == "FAIL" and "not a usable SQLite database" in check.message
+        for check in result.checks
+    )
+
+
 def test_doctor_fail_missing_audit_log_parent_directory(monkeypatch, tmp_path):
     _valid_env(monkeypatch, tmp_path)
     not_a_directory = tmp_path / "not-a-directory"
@@ -264,7 +304,9 @@ def test_doctor_cli_exit_nonzero_when_failures_present(monkeypatch, tmp_path, ca
     code = main(["config", "doctor"])
 
     captured = capsys.readouterr()
-    assert code != 0
+    # Matches config-check's exit-code convention (2 = configuration is bad) so a pipeline
+    # gate written for one command behaves the same for the other.
+    assert code == 2
     assert "Config doctor: FAIL" in captured.err
 
 
@@ -280,10 +322,10 @@ def test_doctor_cli_reports_configuration_error(monkeypatch, tmp_path, capsys):
 
 
 def test_unsafe_permissions_helper_ignores_missing_paths(tmp_path):
-    from agentic_misp_mcp.config_doctor import _unsafe_permissions_reason
+    from agentic_misp_mcp.security.permissions import unsafe_permissions_reason
 
     missing = tmp_path / "does-not-exist" / "audit.jsonl"
-    assert _unsafe_permissions_reason(missing) is None
+    assert unsafe_permissions_reason(missing, check_group=False) is None
 
 
 def test_temp_path_detection_matches_system_tempdir(tmp_path):
@@ -291,3 +333,12 @@ def test_temp_path_detection_matches_system_tempdir(tmp_path):
 
     assert _looks_like_temp_path(tmp_path / "audit.jsonl") is True
     assert _looks_like_temp_path(Path("/var/lib/agentic-misp-mcp/audit.jsonl")) is False
+
+
+def test_temp_path_detection_does_not_false_positive_on_shared_string_prefix(tmp_path):
+    """Regression test: a sibling directory that merely starts with "/tmp" as a string
+    (e.g. /tmporary-data) must not be misclassified as living under /tmp."""
+    from agentic_misp_mcp.config_doctor import _looks_like_temp_path
+
+    assert _looks_like_temp_path(Path("/tmporary-data/audit.jsonl")) is False
+    assert _looks_like_temp_path(Path("/var/tmpfiles/audit.jsonl")) is False

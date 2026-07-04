@@ -3,7 +3,6 @@ from __future__ import annotations
 import json
 import os
 import sqlite3
-import stat
 from datetime import UTC, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Protocol
@@ -17,6 +16,7 @@ from agentic_misp_mcp.policy.models import (
     Role,
     StoredApprovalRecord,
 )
+from agentic_misp_mcp.security.permissions import unsafe_permissions_reason
 
 TERMINAL_STATUSES = {
     ApprovalStatus.USED,
@@ -496,14 +496,6 @@ def _parse_optional_dt(value: str | None) -> datetime | None:
 
 
 def _enforce_safe_store_path(path: Path) -> None:
-    parent = path.parent
-    if parent.exists():
-        parent_mode = stat.S_IMODE(parent.stat().st_mode)
-        if parent_mode & (stat.S_IWGRP | stat.S_IWOTH):
-            raise ApprovalStoreError(
-                f"approval store parent directory is group/world writable: {parent}"
-            )
-    if path.exists():
-        mode = stat.S_IMODE(path.stat().st_mode)
-        if mode & (stat.S_IWGRP | stat.S_IWOTH):
-            raise ApprovalStoreError(f"approval store database is group/world writable: {path}")
+    reason = unsafe_permissions_reason(path, check_group=True)
+    if reason:
+        raise ApprovalStoreError(f"approval store {reason}")
