@@ -8,6 +8,25 @@ testing is still pending.
 
 ## Unreleased
 
+### v0.2.0-rc.1 live validation fixes (2026-07-04)
+
+Live validation of `v0.2.0-rc.1` against a real MISP `2.5.42` lab found and fixed two real
+blockers. See `docs/live-validation-report-v0.2.0-rc.1.md` for full evidence.
+
+- Fixed `add_sighting_with_approval`: it reported `status: "executed"` (and audited
+  `outcome: "success"`) even when MISP answered HTTP 200 but rejected the sighting itself (e.g.
+  `{"message": "Could not add the Sighting. Reason: No valid attributes found."}`, with no
+  `Sighting` key). `MISPSightingSummary` gained a `saved`/`message` signal, mirroring the existing
+  `tag_event`/`publish_event` rejection handling, and the workflow now returns `status: "failed"`
+  when MISP rejects the sighting.
+- Fixed `check_warninglists`: `parse_warninglist_response` did not recognize MISP `2.5.42`'s real
+  positive-hit response shape for `/warninglists/checkValue` — a dict keyed by the queried value,
+  mapping to a list of match objects (e.g. `{"10.1.2.3": [{"id": "88", "name": "...", "matched":
+  "10.0.0.0/8"}]}`) — and silently reported `status: "not_available"` instead of `hit: true`. This
+  was the exact live positive-hit gap `docs/misp-compatibility.md` had flagged as untested.
+- 257 mocked/controlled tests pass (up from 254); `ruff check`/`ruff format --check` clean. Both
+  fixes were also re-verified live against the MISP lab after the change.
+
 ### v0.2.0-rc.1 GA-readiness release candidate (2026-07-04)
 
 `v0.2.0-rc.1` builds on `v0.2.0-beta.2` and is a **release candidate for GA review**, not a GA
