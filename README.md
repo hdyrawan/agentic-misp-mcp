@@ -36,7 +36,7 @@ The first live validation was performed against a controlled, non-production MIS
 | `summarize_event` | Passed | Summarized a real MISP event without returning unbounded raw event JSON. |
 | `generate_ioc_report` | Passed | Generated a deterministic IOC report from live MISP data. |
 | `check_warninglists` | Passed | Warninglist checks returned structured results when available. |
-| Audit logging | Passed with note | Successful calls, validation failures, and blocked writes were written to JSONL audit logs. Blocked writes currently record `allowed=false`; audit `success` semantics should be tightened in a future fix. |
+| Audit logging | Passed | Successful calls, validation failures, runtime errors, and blocked write attempts were written to JSONL audit logs. Blocked policy decisions are recorded with `allowed=false`, `success=false`, and `outcome=blocked`. |
 | Read-only write blocking | Passed | A write attempt with `approved=true` was blocked in `read_only` mode while write mode was disabled; follow-up search confirmed MISP was not modified. |
 | Controlled writes | Pending | Must be validated separately with `AGENTIC_MISP_MCP_ENABLE_WRITE=true` against an isolated lab only. |
 | Production deployment | Not validated | This project remains lab-tested, not production-certified. |
@@ -206,18 +206,28 @@ mkdir -p /home/user/.local/state/agentic-misp-mcp/logs
 ```bash
 docker run --rm \
   --env-file /home/user/.config/agentic-misp-mcp/live.env \
-  agentic-misp-mcp:live-test config-check
+  -v /home/user/.local/state/agentic-misp-mcp/logs:/app/logs \
+  agentic-misp-mcp:live-test \
+  config-check
 ```
 
-`config-check` does not connect to MISP and redacts the API key.
+`config-check` validates runtime configuration and audit-log writability. It does not prove MISP
+API connectivity.
 
 #### Test MISP connectivity from inside the container
 
 ```bash
 docker run --rm \
   --env-file /home/user/.config/agentic-misp-mcp/live.env \
-  --entrypoint sh agentic-misp-mcp:live-test -c \
-  'curl -sk -o /dev/null -w "%{http_code}\n" -H "Authorization: $MISP_API_KEY" "$MISP_URL/servers/getVersion"'
+  --entrypoint python \
+  agentic-misp-mcp:live-test \
+  -c "import os, httpx; verify=os.environ.get('MISP_VERIFY_TLS','true').lower()=='true'; r=httpx.get(os.environ['MISP_URL'].rstrip('/') + '/servers/getVersion', headers={'Authorization': os.environ['MISP_API_KEY'], 'Accept':'application/json'}, verify=verify, timeout=10); print('STATUS:', r.status_code); print(r.text[:1000])"
+```
+
+Expected result:
+
+```text
+STATUS: 200
 ```
 
 A `200` response confirms the container can reach the MISP API before running any MCP tools.
@@ -260,11 +270,73 @@ Then browse to `http://localhost:6274` on the workstation.
 tail -n 20 /home/user/.local/state/agentic-misp-mcp/logs/audit.jsonl
 ```
 
-Audit entries are JSONL, with sanitized arguments and policy decision fields. Both successful
-calls and validation failures (for example, a blank `check_warninglists` input failing with
-`ValueError: IOC value must not be blank`) are recorded.
+Or pretty-print each JSON record:
+
+```bash
+tail -n 20 /home/user/.local/state/agentic-misp-mcp/logs/audit.jsonl | jq .
+```
+
+Audit entries are JSONL, with sanitized arguments and policy decision fields. Successful calls,
+validation failures, runtime errors, and blocked write attempts are recorded. Blocked policy
+decisions use `outcome=blocked`.
 
 Do not bake secrets into the image. Pass credentials only at runtime.
+
+### Read-only live test checklist
+
+Use this checklist for a controlled, non-production MISP lab:
+
+- [ ] Run `config-check`.
+- [ ] Confirm `/servers/getVersion` returns HTTP 200 from inside the Docker container.
+- [ ] Connect MCP Inspector over stdio.
+- [ ] Run `tools/list`.
+- [ ] Run `search_ioc` for a known non-matching IOC and confirm clean no-match behavior.
+- [ ] Run `search_ioc` for a known matching IPv4 indicator.
+- [ ] Run `search_ioc` for a known matching domain indicator.
+- [ ] Run `search_ioc` for a known matching SHA256 indicator.
+- [ ] Run `investigate_ioc` for a known matching IOC.
+- [ ] Run `summarize_event` for a known event ID.
+- [ ] Run `generate_ioc_report` for a known matching IOC.
+- [ ] Run `check_warninglists` for representative public, private, or lab indicators.
+- [ ] Attempt one write tool while `AGENTIC_MISP_MCP_ROLE=read_only` and
+      `AGENTIC_MISP_MCP_ENABLE_WRITE=false`; confirm it is blocked.
+- [ ] Search for the attempted test write value and confirm MISP was not modified.
+- [ ] Check `audit.jsonl` for successful calls, validation failures, runtime errors, and blocked
+      write decisions.
+- [ ] Confirm no write tools were executed.
+
+The specific IOC and event ID values used in one lab may not exist in another MISP instance. Use
+known-good indicators from your own lab dataset.
+
+### Docker MCP client configuration
+
+For MCP clients that can spawn Docker on the same host, use stdio with `docker run`:
+
+```json
+{
+  "mcpServers": {
+    "agentic-misp-mcp": {
+      "type": "stdio",
+      "command": "docker",
+      "args": [
+        "run",
+        "--rm",
+        "-i",
+        "--env-file",
+        "/home/user/.config/agentic-misp-mcp/live.env",
+        "-v",
+        "/home/user/.local/state/agentic-misp-mcp/logs:/app/logs",
+        "agentic-misp-mcp:live-test",
+        "--transport",
+        "stdio"
+      ]
+    }
+  }
+}
+```
+
+This pattern assumes the MCP client can spawn Docker on the same host. For remote or headless
+testing, run the client on the Docker host or use MCP Inspector with SSH port forwarding.
 
 ## Example agent prompts
 
@@ -303,7 +375,13 @@ See `docs/configuration.md` for more examples.
 - Use stdio by default.
 - Treat HTTP transport as experimental. Binding to `0.0.0.0` is refused by default because HTTP mode has no built-in auth/TLS; use `127.0.0.1` or place it behind authenticated TLS termination and explicitly opt in.
 - Keep `.env`, audit logs, and API keys out of git.
-- Tests use mocked MISP responses only; do not add live-MISP tests without an explicit lab-validation phase.
+- Automated tests still use mocked MISP responses.
+- First manual read-only live lab validation has passed against MISP `2.5.42`.
+- Controlled write validation and broader MISP version compatibility remain pending.
+- A read-only write-block test confirmed that `approved=true` does not bypass disabled write mode or the `read_only` role.
+- Blocked policy decisions are audited with `allowed=false`, `success=false`, and `outcome=blocked`.
+- Successful allowed calls are audited with `outcome=success`; runtime failures are audited with `outcome=error`.
+- Approval tokens and other sensitive values are redacted in audit logs.
 - See `SECURITY.md` and `docs/security.md` for reporting and deployment guidance.
 
 ## Documentation
@@ -313,7 +391,7 @@ See `docs/configuration.md` for more examples.
 - [`docs/testing.md`](docs/testing.md) — what the mocked test suite covers and does not cover yet.
 - [`docs/roles.md`](docs/roles.md) — `read_only` / `analyst_write` / `curator` / `admin` policy roles.
 - [`docs/approval-flow.md`](docs/approval-flow.md) — the `approved=false` → `pending_approval` → `approved=true` write flow, with examples.
-- [`docs/live-validation-plan.md`](docs/live-validation-plan.md) — the pending live MISP lab validation checklist.
+- [`docs/live-validation-plan.md`](docs/live-validation-plan.md) — live MISP validation checklist and remaining validation work.
 - [`docs/openapi-inventory.md`](docs/openapi-inventory.md) — sample MISP OpenAPI endpoint classification (planning only).
 
 ## Development
@@ -335,9 +413,22 @@ make check
 
 CI runs the same checks on Python 3.11 and 3.12.
 
+## Known live validation limitations
+
+The first positive live validation used historical OSINT data from 2016. This is useful for
+proving MISP API compatibility and MCP workflow behavior, but it should not be treated as current
+threat activity without telemetry correlation.
+
+Future scoring improvements should consider stale-intel labeling or event-age weighting.
+
+Controlled write execution has not yet been validated. Write testing must be performed only
+against an isolated lab MISP instance with `AGENTIC_MISP_MCP_ENABLE_WRITE=true`.
+
 ## Roadmap
 
-- Live lab validation against a controlled non-production MISP instance.
+- Complete remaining live lab validation: pivot tools, warninglist edge cases, large-event behavior, error paths, controlled writes, and broader MISP version compatibility.
+- Add broader audit outcome tests for additional write tools and error paths.
+- Add stale-intel labeling or event-age weighting for historical OSINT context.
 - Compatibility notes for MISP version differences, especially warninglists and event shapes.
 - Release tagging and packaging once the live validation story is documented.
 - Additional controlled workflows only when they preserve the no-raw-proxy, policy-gated model.
