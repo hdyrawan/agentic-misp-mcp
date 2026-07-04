@@ -99,6 +99,37 @@ async def test_audit_allowed_policy_decision_still_reports_success(tmp_path):
 
 
 @pytest.mark.asyncio
+async def test_audit_tool_reported_failure_is_not_success(tmp_path):
+    """A controlled-write tool can return normally (no exception) with `status: "failed"`
+    when MISP itself rejected the operation (e.g. `saved`/`published` false on HTTP 200).
+    The audit record must not claim `success: true`/`outcome: "success"` for that call."""
+    path = tmp_path / "audit.jsonl"
+    logger = AuditLogger(path)
+    policy_decision = {
+        "role": "curator",
+        "action": "write",
+        "allowed": True,
+        "approval_required": True,
+    }
+
+    async def _tool_failed():
+        return {"tool_name": "tag_event_with_approval", "status": "failed", "result": {}}
+
+    result = await audit_call(
+        logger,
+        "tag_event_with_approval",
+        {"event_id": 1, "tag": "not-a-real-tag"},
+        _tool_failed,
+        policy_decision=policy_decision,
+    )
+
+    assert result["status"] == "failed"
+    record = json.loads(path.read_text().strip())
+    assert record["success"] is False
+    assert record["outcome"] == "failed"
+
+
+@pytest.mark.asyncio
 async def test_audit_failure_sanitizes_sensitive_exception_content(tmp_path):
     path = tmp_path / "audit.jsonl"
     logger = AuditLogger(path)

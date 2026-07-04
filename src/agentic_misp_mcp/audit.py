@@ -69,11 +69,23 @@ async def audit_call(
     # A policy decision that disallows the action is a blocked attempt, not a
     # successful call, even though `call()` returned normally instead of raising.
     policy_allowed = bool(base_record["policy"]["allowed"]) if policy_decision is not None else True
+    # A controlled-write tool can call MISP without raising and still have MISP reject the
+    # operation itself (e.g. `saved`/`published` false on an HTTP 200 response) — see
+    # `workflows/controlled_write.py`'s `status: "failed"` result. That is neither a policy
+    # block nor a real success, so it gets its own outcome rather than being recorded as
+    # `success: true`.
+    tool_reported_failure = isinstance(result, Mapping) and result.get("status") == "failed"
+    if not policy_allowed:
+        outcome = "blocked"
+    elif tool_reported_failure:
+        outcome = "failed"
+    else:
+        outcome = "success"
     await audit_logger.write(
         {
             **base_record,
-            "success": policy_allowed,
-            "outcome": "success" if policy_allowed else "blocked",
+            "success": outcome == "success",
+            "outcome": outcome,
             "duration_ms": duration_ms,
             "error_type": None,
             "error_message": None,

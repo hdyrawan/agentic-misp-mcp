@@ -11,7 +11,7 @@ It exists because agents should not need unrestricted MISP API access to help wi
 - Early development; APIs, outputs, and internals may still change.
 - Mocked test coverage exists for core workflows and policy paths.
 - First live read-only lab validation has passed against MISP `2.5.42` using Docker, stdio transport, and MCP Inspector.
-- Controlled write validation is still pending and must only be performed against an isolated lab MISP instance.
+- Controlled write validation has passed against the same lab (`AGENTIC_MISP_MCP_ENABLE_WRITE=true`, `analyst_write`/`curator` roles); two bugs found during that pass are fixed (see below).
 - Broader MISP version compatibility testing is still pending.
 - Not production-ready.
 - Current MCP tool count: **19**.
@@ -42,7 +42,11 @@ The first live validation was performed against a controlled, non-production MIS
 | Error path: unreachable `MISP_URL` | Passed | Returned a clean connection error (`isError: true`) with no crash; audit log recorded `outcome=error` and `error_type=MISPClientError`. |
 | Error path: invalid `MISP_API_KEY` | Passed | Returned a clean authentication error with no crash and no key echoed; audit log recorded `outcome=error` and `error_type=MISPAuthenticationError`. |
 | MCP Inspector CLI mode | Passed | `tools/list` and `tools/call` verified via `--cli` mode (non-browser) against `uv run agentic-misp-mcp` over stdio. |
-| Controlled writes | Pending | Must be validated separately with `AGENTIC_MISP_MCP_ENABLE_WRITE=true` against an isolated lab only. |
+| `submit_ioc_with_approval` | Passed | `pending_approval` then `executed` against a dedicated sandbox event; created attribute confirmed visible via `search_ioc`. |
+| `add_sighting_with_approval` | Passed | Sighting recorded against the submitted attribute and confirmed visible in MISP. |
+| `tag_event_with_approval` | Passed | Real tag (`tlp:white`) confirmed attached to the event; an unrecognized tag correctly reports `status: "failed"` (see Fixed below). |
+| `publish_event_with_approval` | Passed | `analyst_write` correctly blocked (requires `curator`); `curator` published the sandbox event, confirmed via direct MISP query (`published: true`). |
+| Controlled-write policy blocking | Passed | `read_only`/write-disabled and `analyst_write`-on-publish were both correctly blocked with no MISP call made. |
 | Production deployment | Not validated | This project remains lab-tested, not production-certified. |
 
 The first positive live IOC test used `54.87.87.13`, which matched MISP event `187`, `OSINT - NANHAISHU RATing the South China Sea`. The generated IOC report classified the IOC as `suspicious` with medium confidence based on live MISP matches, actionable `to_ids` attributes, related event context, and extracted related IOCs.
@@ -425,12 +429,21 @@ threat activity without telemetry correlation.
 
 Future scoring improvements should consider stale-intel labeling or event-age weighting.
 
-Controlled write execution has not yet been validated. Write testing must be performed only
-against an isolated lab MISP instance with `AGENTIC_MISP_MCP_ENABLE_WRITE=true`.
+Controlled write execution has been validated against an isolated lab (see the table above).
+Two real bugs surfaced during that pass and are now fixed:
+
+- A present-but-empty `AGENTIC_MISP_MCP_APPROVAL_TOKEN` (e.g. `KEY=` in a `.env` file) was parsed
+  as a configured empty-string token rather than "no token configured," silently blocking every
+  controlled-write execution. Blank/whitespace-only tokens now normalize to unset.
+- `tag_event_with_approval` and `publish_event_with_approval` reported `status: "executed"` even
+  when MISP itself rejected the operation (`saved`/`published: false` on an HTTP 200 response,
+  e.g. an unrecognized tag name). They now report a distinct `status: "failed"`, with a matching
+  `outcome: "failed"` audit entry, so a caller cannot mistake a MISP-side rejection for a real
+  write. See [`docs/approval-flow.md`](docs/approval-flow.md#executed-vs-failed).
 
 ## Roadmap
 
-- Complete remaining live lab validation: pivot tools, warninglist edge cases, large-event behavior, controlled writes, and broader MISP version compatibility. (Error paths for unreachable `MISP_URL` and invalid `MISP_API_KEY` are now validated.)
+- Complete remaining live lab validation: pivot tools, warninglist edge cases, large-event behavior, and broader MISP version compatibility. (Error paths for unreachable `MISP_URL`/invalid `MISP_API_KEY`, and controlled writes, are now validated.)
 - Add broader audit outcome tests for additional write tools and error paths.
 - Add stale-intel labeling or event-age weighting for historical OSINT context.
 - Compatibility notes for MISP version differences, especially warninglists and event shapes.

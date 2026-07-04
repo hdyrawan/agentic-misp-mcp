@@ -108,6 +108,21 @@ def _executed_result(tool_name: str, decision: PolicyDecision, result: Any) -> d
     }
 
 
+def _failed_result(tool_name: str, decision: PolicyDecision, result: Any) -> dict[str, Any]:
+    """MISP answered the write call (no exception), but rejected the operation itself —
+    for example `/events/addTag` or `/events/publish` returning HTTP 200 with `saved`/
+    `published` set to false. Distinct from `executed` so a caller cannot mistake a
+    MISP-side rejection for a real write."""
+    dumped = result.model_dump() if hasattr(result, "model_dump") else result
+    return {
+        "tool_name": tool_name,
+        "status": "failed",
+        "risk": RISK_BY_TOOL[tool_name],
+        "policy": _policy_fields(decision),
+        "result": dumped,
+    }
+
+
 async def propose_event_workflow(
     decision: PolicyDecision,
     *,
@@ -243,6 +258,8 @@ async def tag_event_with_approval_workflow(
     ):
         return _approval_token_blocked_result(tool_name, decision)
     result = await client.tag_event(event_id, tag)
+    if not result.saved:
+        return _failed_result(tool_name, decision, result)
     return _executed_result(tool_name, decision, result)
 
 
@@ -269,4 +286,6 @@ async def publish_event_with_approval_workflow(
     ):
         return _approval_token_blocked_result(tool_name, decision)
     result = await client.publish_event(event_id)
+    if not result.published:
+        return _failed_result(tool_name, decision, result)
     return _executed_result(tool_name, decision, result)

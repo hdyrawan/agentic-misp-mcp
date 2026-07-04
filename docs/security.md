@@ -46,14 +46,22 @@ The original 13 read tools are classified as `read` and remain allowed under `re
     not set. Returns a sanitized `ApprovalRequest` proposal. No MISP call is made.
   - `executed` — role permits the action and (approval not required, or `approved=True` was
     explicitly passed, plus a matching `approval_token` when token enforcement is configured).
-    Only in this branch is the corresponding MISP write method called.
+    The corresponding MISP write method is called in this branch and MISP confirmed the write
+    (e.g. `saved`/`published` was true in MISP's response).
+  - `failed` — same conditions as `executed` (the MISP write method was called, no exception was
+    raised), but MISP itself rejected the operation — for example `/events/addTag` or
+    `/events/publish` answering HTTP 200 with `saved`/`published: false` (an unknown tag name, or
+    a publish MISP declined). Distinct from `executed` so a caller cannot mistake a MISP-side
+    rejection for a real write. Found and fixed during 2026-07-04 live lab validation, where
+    `tag_event_with_approval` previously reported `executed` for a tag MISP never actually
+    attached.
 - `publish_event_with_approval` uses a dedicated `publish` policy action restricted to
   `curator`/`admin` roles, is always classified `high` risk, and is always approval-gated when
   `AGENTIC_MISP_MCP_REQUIRE_APPROVAL=true`.
 - No write ever happens silently: every branch above (including `blocked`) is audited, and only
-  the `executed` branch invokes a narrow MISP write method (`add_attribute`, `add_sighting`,
-  `tag_event`, `publish_event` in `misp/client.py`). There is no event-creation MCP tool and no
-  `submit_event_with_approval` in v0.1. There is no generic request proxy.
+  the `executed`/`failed` branches invoke a narrow MISP write method (`add_attribute`,
+  `add_sighting`, `tag_event`, `publish_event` in `misp/client.py`). There is no event-creation
+  MCP tool and no `submit_event_with_approval` in v0.1. There is no generic request proxy.
 
 ## MCP tool boundary
 
@@ -105,12 +113,16 @@ TLS verification is enabled by default with `MISP_VERIFY_TLS=true`. Disabling TL
 ## Audit logging
 
 Every MCP tool call writes one JSONL audit record, including failures. Audit records include tool
-name, sanitized arguments, policy decision fields, an `outcome` of `success`, `blocked`, or `error`,
-duration, and safe error type/message. A policy decision with `allowed: false` (for example a write
-attempt while read-only or with writes disabled) is recorded with `success: false` and
-`outcome: "blocked"`, distinct from runtime errors, even though the tool call itself returns
-normally rather than raising. Audit records do not include authorization headers, API keys,
-approval tokens, authkeys, cookies, passwords, or raw backend response bodies.
+name, sanitized arguments, policy decision fields, an `outcome` of `success`, `blocked`, `failed`,
+or `error`, duration, and safe error type/message. A policy decision with `allowed: false` (for
+example a write attempt while read-only or with writes disabled) is recorded with
+`success: false` and `outcome: "blocked"`, distinct from runtime errors, even though the tool call
+itself returns normally rather than raising. A controlled-write tool that calls MISP without
+raising, but whose result reports `status: "failed"` (MISP itself rejected the write — see
+`tag_event_with_approval`/`publish_event_with_approval` above), is recorded with
+`success: false` and `outcome: "failed"`, distinct from both `blocked` (policy never allowed the
+call) and `success` (MISP accepted the write). Audit records do not include authorization
+headers, API keys, approval tokens, authkeys, cookies, passwords, or raw backend response bodies.
 
 The audit log path is validated at startup. Its parent directory must already be writable or be
 creatable by the runtime user. Container examples mount `./logs` into `/app/logs` so logs persist

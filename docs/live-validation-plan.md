@@ -128,18 +128,38 @@ instance, using a lab-only event/org. Follow the two-call approval flow describe
 - [ ] `propose_event` — confirm the proposed payload shape is a payload MISP would actually
       accept (cross-check field names/types against this MISP version's `/events/add`).
 - [ ] `propose_attribute` — same, against `/attributes/add/{event_id}`.
-- [ ] `submit_ioc_with_approval` with `AGENTIC_MISP_MCP_ROLE=analyst_write` — confirm
+- [x] `submit_ioc_with_approval` with `AGENTIC_MISP_MCP_ROLE=analyst_write`/`curator` — confirm
       `pending_approval` then `executed` against a real lab event, and confirm the created
-      attribute is visible in the MISP UI/API afterward.
-- [ ] `add_sighting_with_approval` — confirm a real sighting is recorded and queryable.
-- [ ] `tag_event_with_approval` — confirm the tag is actually attached to the event afterward.
-- [ ] `publish_event_with_approval` with `AGENTIC_MISP_MCP_ROLE=curator` (or `admin`) — confirm
+      attribute is visible in the MISP UI/API afterward. Validated 2026-07-04 via MCP Inspector
+      CLI against a dedicated sandbox event: attribute created and confirmed visible via
+      `search_ioc`. **Bug found and fixed:** a present-but-empty `AGENTIC_MISP_MCP_APPROVAL_TOKEN`
+      (e.g. `KEY=` in a `.env` file) was parsed as an empty-string token rather than "no token
+      configured," silently blocking every controlled-write execution with "approval token is
+      required or invalid." Fixed in `settings.py` by normalizing a blank/whitespace-only token
+      to `None`.
+- [x] `add_sighting_with_approval` — confirm a real sighting is recorded and queryable. Validated
+      2026-07-04: sighting recorded against the submitted attribute and visible in MISP.
+- [x] `tag_event_with_approval` — confirm the tag is actually attached to the event afterward.
+      Validated 2026-07-04. **Bug found and fixed:** MISP's `/events/addTag` answers HTTP 200
+      with `{"saved": false, "errors": "Invalid Tag."}` for an unrecognized tag name, but the
+      tool unconditionally reported `status: "executed"` regardless — confirmed via direct MISP
+      API query that the tag was never actually attached to the event. Fixed by adding a
+      `status: "failed"` result (and a matching `outcome: "failed"` audit entry, distinct from
+      `success`/`blocked`) when `result.saved`/`result.published` is false; re-verified with both
+      an invalid tag (`failed`) and a real tag `tlp:white` (`executed`, confirmed attached).
+- [x] `publish_event_with_approval` with `AGENTIC_MISP_MCP_ROLE=curator` (or `admin`) — confirm
       the event is actually published/visible to sync in the lab, and confirm `analyst_write`
-      is still blocked from this tool in the same lab.
-- [ ] Re-run the `read_only` and write-disabled blocking checks from `docs/roles.md` against the
+      is still blocked from this tool in the same lab. Validated 2026-07-04: `analyst_write`
+      correctly blocked (`allowed: false`); `curator` published the sandbox event successfully,
+      confirmed via direct MISP API (`published: true`). Same `executed`/`failed` distinction as
+      `tag_event_with_approval` applies here (`MISPPublishResult.published`).
+- [x] Re-run the `read_only` and write-disabled blocking checks from `docs/roles.md` against the
       live instance to confirm policy blocking behaves identically to the mocked tests — no
       write should ever happen when blocked, verified by checking the lab event afterward, not
-      just by trusting the tool's returned `status`.
+      just by trusting the tool's returned `status`. Validated 2026-07-04: `submit_ioc_with_approval`
+      correctly `blocked` under `read_only`/write-disabled (`client.calls` never reached, confirmed
+      via a follow-up `search_ioc` finding no such attribute); `publish_event_with_approval`
+      correctly `blocked` under `analyst_write` (no MISP call made, so no state to check).
 
 ## 9. Sign-off
 
