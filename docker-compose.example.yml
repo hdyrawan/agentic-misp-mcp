@@ -1,0 +1,8 @@
+services:
+  agentic-misp-mcp:
+    build: .
+    image: agentic-misp-mcp:local
+    env_file: .env
+    volumes:
+      - ./logs:/app/logs
+    command: ["--transport", "stdio"]
