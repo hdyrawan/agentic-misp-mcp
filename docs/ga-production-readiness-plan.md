@@ -1,6 +1,8 @@
 # GA production-readiness plan
 
-**Status: plan only. Not implemented. Requires explicit approval before any GA work begins.**
+**Status: plan document. Phase B's code/test-level portion and part of Phase C/D have been
+implemented in `v0.2.0-rc.1` (see the update note in each phase below); the remaining phases and
+the GA claim itself still require explicit review before proceeding.**
 
 This document translates the actual, current state of the project — after `v0.2.0-beta.1`
 (production-write approval beta) and `v0.2.0-beta.2` (operational-readiness hardening) — into a
@@ -40,17 +42,29 @@ reconciled against what beta.2 actually closed:
    - A positive warninglist hit against real MISP warninglist data (miss/`available` was already
      validated live in beta.1; a true hit was not).
 2. **`propose_event`/`propose_attribute` payload-shape validation** against real MISP
-   `/events/add` and `/attributes/add/{event_id}` endpoints. These tools never call MISP
-   themselves, but their proposed payload shape has never been cross-checked against a live
-   instance.
+   `/events/add` and `/attributes/add/{event_id}` endpoints. **Partially closed in `v0.2.0-rc.1`**:
+   required-field, value-range, and known-attribute-type/category-vocabulary validation is now
+   implemented and tested (`policy/proposal_validation.py`,
+   `tests/test_proposal_validation.py`) — malformed/unsupported payloads never build a proposal.
+   These tools still never call MISP themselves, and their proposed payload shape has still never
+   been cross-checked against a live instance (see `docs/live-beta-validation-v0.2.0-rc.1.md`).
 3. **Broader MISP version compatibility** beyond `2.5.42` — no second MISP version has been
-   tested against this project at all.
+   tested against this project at all. **Partially addressed in `v0.2.0-rc.1`**: a compatibility
+   matrix now exists (`docs/misp-compatibility.md`) documenting assumptions and risks, but it
+   still records exactly one tested version.
 4. **Approval-operator separation** beyond filesystem permissions (documented separate
    users/hosts, or an operator-only administrative container/image).
 5. **Supply-chain and release hygiene**: container image scanning, dependency vulnerability
    scanning, and secret scanning are not yet part of CI/release; no signed release tag exists yet.
-6. **A tagged release** with a finalized `CHANGELOG.md` entry — no git tag exists for this project
-   as of this document.
+   **Partially addressed in `v0.2.0-rc.1`**: `.github/dependabot.yml`'s previously-blank
+   `package-ecosystem` (which meant no dependency updates were actually running) is fixed, and the
+   dependency-update process plus the three still-open scans are documented as explicit release
+   checklist items in `docs/production-readiness.md`. The scans themselves are still not
+   automated in CI.
+6. **A tagged release** with a finalized `CHANGELOG.md` entry. `v0.2.0-beta.1` and
+   `v0.2.0-beta.2` are both tagged and pushed to `origin`; no tag exists yet for `v0.2.0-rc.1` or
+   any GA release, and this project does not tag/push a release as a side effect of implementation
+   work — tagging is a separate, explicitly requested step.
 
 ## Phased plan
 
@@ -84,19 +98,26 @@ Goal: turn the five still-open live items above from mocked-only into live-valid
 
 ### Phase B — Controlled-write payload validation
 
-- Manually validate (not via an MCP tool call) that `propose_event`'s and `propose_attribute`'s
-  proposed payload shapes are accepted by a real MISP `/events/add` and
+- **Code/test-level validation done in `v0.2.0-rc.1`**: `propose_event`/`propose_attribute` now
+  reject missing required fields, out-of-range `distribution`/`threat_level_id`/`analysis`
+  values, and unsupported attribute types/categories before building a payload, returning
+  `status: "invalid"` with `validation_errors`. See `policy/proposal_validation.py` and
+  `tests/test_proposal_validation.py`.
+- **Still open**: manually validate (not via an MCP tool call) that `propose_event`'s and
+  `propose_attribute`'s proposed payload shapes are accepted by a real MISP `/events/add` and
   `/attributes/add/{event_id}` call, using a direct API call (`curl`/Postman/a throwaway script)
   against the lab, not by adding a new write-executing MCP tool. Document any shape mismatch and
   fix `misp/queries.py`'s payload builders if needed.
 
 ### Phase C — Broader MISP version compatibility
 
-- Stand up at least one additional MISP version (an older and/or newer release than `2.5.42`) and
-  re-run the read-only and controlled-write validation checklists against it.
+- **Matrix published in `v0.2.0-rc.1`**: see `docs/misp-compatibility.md` for tested versions,
+  API-shape assumptions, and known risks. It records exactly one tested version (`2.5.42`).
+- **Still open**: stand up at least one additional MISP version (an older and/or newer release
+  than `2.5.42`) and re-run the read-only and controlled-write validation checklists against it.
 - Document any version-specific differences, especially in warninglist response shapes (already
-  isolated in `misp/warninglists.py` for exactly this reason) and event/attribute JSON shapes.
-- Publish a compatibility matrix (MISP version → validated/not validated, known differences).
+  isolated in `misp/warninglists.py` for exactly this reason) and event/attribute JSON shapes, as
+  an update to `docs/misp-compatibility.md`.
 
 ### Phase D — Operational and supply-chain hardening
 
@@ -106,10 +127,12 @@ Goal: turn the five still-open live items above from mocked-only into live-valid
   MCP/agent process cannot reach the approval CLI or database even with a shared filesystem.
 - Add container image scanning (for example Trivy or Grype) to CI/release. Not present in
   `.github/workflows/ci.yml` as of this document.
-- Fix and enable dependency vulnerability scanning: `.github/dependabot.yml` exists but its
-  `package-ecosystem` value is currently blank/invalid, so it is not actually running. Fix it (for
-  example `"pip"` and `"github-actions"` ecosystem entries) or add `pip-audit` to CI as a more
-  immediate check.
+- **Fixed in `v0.2.0-rc.1`**: `.github/dependabot.yml`'s `package-ecosystem` value was blank, so
+  it was not actually running any dependency updates. It now tracks `"pip"` and `"github-actions"`
+  ecosystem entries. Still open: add `pip-audit` (or equivalent) to CI as an active vulnerability
+  check, not just version-update PRs. The dependency-update review process and the
+  still-open scans are documented as release-checklist items in `docs/production-readiness.md`'s
+  "Dependency update process and supply-chain release checklist".
 - Add secret scanning (for example `gitleaks` or `trufflehog`) across repository history and
   release artifacts; none is currently configured in CI.
 
@@ -138,5 +161,11 @@ In addition, per this project's current scope:
 
 ## Approval gate
 
-This plan is a proposal for review, not a work order. Do not begin Phase A-E implementation work
-until this plan has been explicitly reviewed and approved.
+This plan was a proposal for review, not a self-executing work order. The code/test-level portion
+of Phase B, the initial compatibility matrix in Phase C, and the Dependabot fix plus documented
+release-checklist process in Phase D were explicitly authorized and implemented as `v0.2.0-rc.1`.
+The remaining items in every phase — all live edge-case validation in Phase A, the live
+cross-check in Phase B, a second tested MISP version in Phase C, approval-operator separation and
+the three automated scans in Phase D, and Phase E's signed release tag — still require their own
+explicit review and authorization before proceeding. Nothing in this document, including the
+`v0.2.0-rc.1` work already done, constitutes a GA production-readiness claim by itself.

@@ -65,6 +65,11 @@ matching `approval_token`; missing or incorrect tokens return `blocked`. If the 
 is unset, the older `approved=true` behavior is preserved for backward compatibility.
 `propose_event`/`propose_attribute` never call MISP regardless of approval. Approval decisions
 are modeled and fully audited; there is no persistent approval storage across process restarts.
+`propose_event`/`propose_attribute` also validate the proposed payload before building it
+(`v0.2.0-rc.1`): required fields, `distribution`/`threat_level_id`/`analysis` ranges, and a
+known-vocabulary attribute type/category allowlist. A malformed or unsupported payload returns
+`status: "invalid"` with a `validation_errors` list instead of a proposal; see
+[`docs/security.md`](security.md).
 
 Production-oriented runtime guidance:
 

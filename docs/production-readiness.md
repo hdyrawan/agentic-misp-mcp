@@ -70,9 +70,13 @@ explicitly **out of scope** for the first production target above. Core controll
 validation has passed in a lab (see `docs/live-validation-plan.md` section 8), but that is not
 sufficient for production use. Before considering controlled writes for any real deployment:
 
-- `propose_event`/`propose_attribute` payload shapes must be validated against a real MISP
-  `/events/add` and `/attributes/add/{event_id}` (still pending — these tools never call MISP,
-  but their proposed payload shape has not been cross-checked against a live instance).
+- `propose_event`/`propose_attribute` now validate required fields, value ranges, and a
+  known-vocabulary attribute type/category allowlist before building a payload (`v0.2.0-rc.1`,
+  `policy/proposal_validation.py`) — malformed/unsupported payloads return `status: "invalid"`
+  and are never built into a proposal. This closes the code/test-level gap. Cross-checking the
+  exact accepted payload shape against a real MISP `/events/add` and `/attributes/add/{event_id}`
+  call is still pending (see `docs/live-beta-validation-v0.2.0-rc.1.md`) — these tools never call
+  MISP either way.
 - Lab approval mode and production approval mode must not be confused. In lab mode,
   `AGENTIC_MISP_MCP_APPROVAL_TOKEN` is only an optional shared-secret hardening control for the
   legacy `approved=true` flow. For production-write pilots, set
@@ -161,6 +165,9 @@ values are:
 - `success` — the call was allowed and completed normally.
 - `blocked` — policy did not allow the action (write mode disabled, role does not permit it, or
   approval-token mismatch). No MISP call was made.
+- `invalid` — (`v0.2.0-rc.1`) `propose_event`/`propose_attribute` allowed the attempt, but the
+  proposed payload itself failed validation (missing field, out-of-range value, unsupported
+  attribute type/category). No MISP call was made either way — these tools never call MISP.
 - `failed` — a controlled-write tool reached MISP and did not raise an exception, but MISP itself
   rejected the operation (for example `saved`/`published: false` on an HTTP 200 response).
 - `error` — a runtime exception occurred (network failure, authentication failure, timeout,
@@ -282,7 +289,9 @@ Passed:
 
 Not yet passed / not yet attempted:
 
-- `propose_event`, `propose_attribute` payload-shape validation against real MISP endpoints.
+- `propose_event`, `propose_attribute` payload-shape cross-check against real MISP endpoints
+  (`v0.2.0-rc.1` closed required-field/range/vocabulary validation at the code/test level only —
+  see `docs/live-beta-validation-v0.2.0-rc.1.md`).
 - `generate_event_report`, `generate_markdown_ioc_report`, `generate_markdown_event_report`
   against real data.
 - `pivot_ioc`, `find_related_iocs`, `extract_event_iocs`, `explain_event_context`.
@@ -325,7 +334,8 @@ are true. Status reflects this document's date of writing; re-verify before rely
       documentation pass** — re-verify at actual release time, since docs can drift again as new
       work lands.
 - [ ] A release tag and `CHANGELOG.md` entry are prepared for the version being certified.
-      **Not yet done** — no git tag has been created for this project as of this document.
+      **Not yet done for a GA release** — `v0.2.0-beta.1` and `v0.2.0-beta.2` are tagged and
+      pushed to `origin`, but no tag exists yet for `v0.2.0-rc.1` or any GA-certified version.
 
 ## Not required for beta, required before GA
 
@@ -341,15 +351,58 @@ The following items are **not required** to run the `v0.2.0-beta.1` isolated liv
       terminal (`used`/`rejected`/`expired`) records past the age threshold and never touches
       `pending`/`approved` records.
 - [ ] Strengthen approval-operator separation beyond filesystem permissions, for example documented separate users/hosts or an operator-only administrative container.
-- [ ] Build and publish a MISP version compatibility matrix covering warninglists, event shapes, attribute/sighting/tag/publish response shapes, and error behavior.
+- [x] Validate `propose_event`/`propose_attribute` payload shape at the code/test level (required
+      fields, value ranges, known attribute type/category vocabulary). **Done in `v0.2.0-rc.1`** —
+      see `policy/proposal_validation.py` and `tests/test_proposal_validation.py`. Live
+      cross-checking against a real MISP `/events/add`/`/attributes/add/{event_id}` call is a
+      separate, still-open item (see `docs/live-beta-validation-v0.2.0-rc.1.md`).
+- [~] Build and publish a MISP version compatibility matrix covering warninglists, event shapes,
+      attribute/sighting/tag/publish response shapes, and error behavior. **Matrix published in
+      `v0.2.0-rc.1`** — see [`docs/misp-compatibility.md`](misp-compatibility.md) — but it
+      documents exactly one tested version (`2.5.42`). Testing a second MISP version remains open
+      (Phase C of `docs/ga-production-readiness-plan.md`).
 - [x] Write a rollback playbook for mistaken writes, including MISP UI/API steps outside this
       project because the MCP server intentionally has no delete/unpublish/retract tools.
       **Done in `v0.2.0-beta.2`** — see [`docs/rollback.md`](rollback.md).
+- [x] Document the dependency update process and required release-checklist scans. **Done in
+      `v0.2.0-rc.1`** — see "Dependency update process and supply-chain release checklist" below.
+      Fixed `.github/dependabot.yml` (previously blank `package-ecosystem`, so no updates were
+      actually running).
 - [ ] Add container image scanning to the release pipeline.
 - [ ] Add dependency vulnerability scanning to CI/release checks.
 - [ ] Add secret scanning for repository history and release artifacts.
 - [ ] Create a signed release tag if feasible in the release environment.
 - [ ] Attach the completed live validation report to release notes.
+
+## Dependency update process and supply-chain release checklist
+
+`.github/dependabot.yml` tracks two ecosystems on a weekly schedule: `pip` (this project's Python
+dependencies, declared in `pyproject.toml`) and `github-actions` (workflow action pins in
+`.github/workflows/`). Prior to `v0.2.0-rc.1` its `package-ecosystem` value was blank, so no
+Dependabot updates were actually running; this is now fixed.
+
+Process for handling a Dependabot update PR:
+
+1. Review the version diff and linked changelog/release notes for the dependency.
+2. Run the full quality gate against the update branch: `uv run --extra dev ruff check .`,
+   `uv run --extra dev ruff format --check .`, `uv run --extra dev pytest -q`.
+3. For a major-version bump, additionally re-run a smoke test of the affected path (for example,
+   an `httpx` major bump should get a manual `search_ioc`/`investigate_ioc` smoke test against a
+   lab MISP, not just mocked tests, since the mocked tests use a fake transport).
+4. Merge only after CI passes; do not batch multiple unrelated dependency bumps into one merge.
+
+The following supply-chain/release hygiene items are **release checklist items, not yet
+automated**, and remain open GA blockers (see `docs/ga-production-readiness-plan.md` Phase D):
+
+- **Dependency vulnerability scanning**: run `pip-audit` (or equivalent) against the resolved
+  dependency set before tagging a release. Not yet wired into CI.
+- **Container image scanning**: run Trivy or Grype against the built Docker image before tagging
+  a release. Not yet wired into CI/release.
+- **Secret scanning**: run gitleaks or trufflehog against repository history and release
+  artifacts before tagging a release. Not yet wired into CI.
+
+Until these are automated in CI, treat them as manual pre-tag checklist items for any release,
+including `v0.2.0-rc.1` itself.
 
 ## Explicit non-goals and out-of-scope items
 

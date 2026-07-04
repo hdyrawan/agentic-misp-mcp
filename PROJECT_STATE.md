@@ -3,26 +3,35 @@
 Project: agentic-misp-mcp
 
 Current status:
-- Current hardening branch `hardening/v0.2.0-beta.2-operational-readiness` contains the
-  `v0.2.0-beta.2` operational-readiness candidate on top of `v0.2.0-beta.1`: adds
+- `main` now contains `v0.2.0-beta.2` (merged via PR #8, commit `6482348`): adds
   `agentic-misp-mcp config doctor` (PASS/WARN/FAIL operational-readiness checks, secrets
   redacted, nonzero exit on `FAIL`), `agentic-misp-mcp approvals prune --older-than <duration>
   [--vacuum]` (operator-CLI-only approval-store maintenance, never exposed as an MCP tool),
   `docs/rollback.md`, expanded Docker production guidance, and mocked/controlled test coverage
   closing four `v0.2.0-beta.1` live-validation gaps (HTTP 429, large-result truncation, positive
   warninglist hit, warninglist `not_available`). No MCP tools were added or changed; the MCP tool
-  count and write-tool count (6) remain unchanged. Not yet merged to `main`; not GA
-  production-ready. See `docs/live-validation-report-v0.2.0-beta.2.md` for live validation
-  evidence (config doctor / approvals prune run against the same lab used for beta.1, plus a
-  read-only regression smoke test — no bugs found).
-- `main` contains the `v0.2.0-beta.1` production-write beta candidate: opt-in
+  count and write-tool count (6) remain unchanged. See `docs/live-validation-report-v0.2.0-beta.2.md`
+  for live validation evidence (config doctor / approvals prune run against the same lab used for
+  beta.1, plus a read-only regression smoke test — no bugs found).
+- Current release-candidate branch `release/v0.2.0-rc.1-ga-readiness` contains `v0.2.0-rc.1` on
+  top of `v0.2.0-beta.2`: adds payload validation to `propose_event`/`propose_attribute`
+  (`policy/proposal_validation.py` — required fields, value ranges, known attribute
+  type/category vocabulary; a malformed/unsupported payload now returns `status: "invalid"`,
+  audited as a new `outcome: "invalid"`, and still never calls MISP), a MISP compatibility matrix
+  (`docs/misp-compatibility.md`), a fixed `.github/dependabot.yml` (previously blank
+  `package-ecosystem`), and a documented dependency-update/supply-chain release-checklist process.
+  No MCP tools were added or changed; the MCP tool count and write-tool count (6) remain
+  unchanged. This is a **release candidate for GA review, not a GA claim** — see
+  `docs/ga-production-readiness-plan.md` for what remains. Not yet merged to `main`; not yet
+  tagged.
+- `v0.2.0-beta.1` production-write beta (now part of `main` via `v0.2.0-beta.2`): opt-in
   `AGENTIC_MISP_MCP_APPROVAL_MODE=production` adds SQLite approval records, CLI-only
   approve/reject, one-time redemption, exact operation hashes, TTL expiry, replay/payload-swap
   blocking, publish kill switch, and type/category/tag guardrails for the four existing
   write-executing tools only. Default lab mode remains backward compatible; `approval_token` is
   lab/shared-secret hardening only, while production requires an operator-approved
-  `approval_request_id` and consumes it before the MISP write attempt. This candidate is suitable
-  for isolated pilot validation only; it is not GA production-ready.
+  `approval_request_id` and consumes it before the MISP write attempt. Suitable for isolated
+  pilot validation only; not GA production-ready.
 - Phase 1 complete: read-only core MCP
 - Phase 2 complete: agentic IOC investigation engine
 - Phase 3 complete: event intelligence and pivoting
@@ -94,11 +103,23 @@ Current status:
   write capabilities are in scope. Lab approval mode remains the default unless
   `AGENTIC_MISP_MCP_APPROVAL_MODE=production` is explicitly configured. Suitable for isolated
   pilot validation; not GA production-ready.
+- Phase 12 (`v0.2.0-rc.1`, current release-candidate branch): GA-readiness follow-up on top of
+  `v0.2.0-beta.2`. Added `propose_event`/`propose_attribute` payload validation (required fields,
+  value ranges, known attribute type/category vocabulary) with a new `status: "invalid"`/
+  `outcome: "invalid"` result distinct from `blocked`/`failed`/`success`; a MISP compatibility
+  matrix (`docs/misp-compatibility.md`) documenting the one tested version (`2.5.42`) and known
+  version-drift risks; a fixed `.github/dependabot.yml` (previously blank `package-ecosystem`);
+  and a documented dependency-update/supply-chain release-checklist process in
+  `docs/production-readiness.md`. No MCP tools added or changed; write-tool count (6) and total
+  tool count (19) unchanged. `docs/live-beta-validation-v0.2.0-rc.1.md` was added as a pending
+  checklist — it has not been executed, and no `docs/live-validation-report-v0.2.0-rc.1.md` was
+  created, since no live validation was actually run for this pass. This is a release candidate
+  for GA review, not a GA claim.
 
-Current tests: 217 passed on the `hardening/v0.2.0-beta.2-operational-readiness` branch (up from
-166 on `main` at the start of this pass); re-run the quality gate before tagging.
-Current MCP tool count: 19 (unchanged; `config doctor` and `approvals prune` are CLI-only, not
-MCP tools).
+Current tests: 254 passed on the `release/v0.2.0-rc.1-ga-readiness` branch (up from 220 on `main`
+at the start of this pass); re-run the quality gate before tagging.
+Current MCP tool count: 19 (unchanged; `config doctor`, `approvals prune`, and the new proposal
+validation layer are not MCP tools).
 Current license: MIT.
 
 Current MCP tools:
@@ -139,11 +160,15 @@ Current validation status:
 - Not production-ready: lab-validated, not production-certified.
 
 Next steps:
-- Complete the `v0.2.0-beta.1` live beta validation checklist in
-  `docs/live-beta-validation-v0.2.0-beta.1.md`, including read-only edge cases and production
-  approval-mode replay/hash-mismatch/wrong-tool/publish/allowlist/audit checks.
-- Merge `hardening/v0.2.0-beta.2-operational-readiness` and tag `v0.2.0-beta.2` once reviewed.
-- Broader MISP version compatibility testing beyond `2.5.42`.
-- Live (not just mocked) evidence for HTTP 429, large-result truncation at realistic scale, and a
-  positive warninglist hit remains open — see `docs/production-readiness.md`'s release/sign-off
-  checklist and `docs/ga-production-readiness-plan.md` for the path to GA.
+- Execute the `v0.2.0-rc.1` live validation checklist in
+  `docs/live-beta-validation-v0.2.0-rc.1.md` (currently all pending), including a live
+  cross-check of `propose_event`/`propose_attribute` payload shapes against a real MISP instance.
+- Merge `release/v0.2.0-rc.1-ga-readiness` and tag `v0.2.0-rc.1` once reviewed.
+- Broader MISP version compatibility testing beyond `2.5.42` (`docs/misp-compatibility.md`).
+- Live (not just mocked) evidence for HTTP 429, large-result truncation at realistic scale, a
+  positive warninglist hit, TLS fail-closed, and timeout behavior remains open — see
+  `docs/production-readiness.md`'s release/sign-off checklist and
+  `docs/ga-production-readiness-plan.md` for the full path to GA.
+- Automate the three still-open supply-chain scans (dependency vulnerability, container image,
+  secret scanning) in CI/release, per `docs/production-readiness.md`'s "Dependency update process
+  and supply-chain release checklist".
