@@ -7,6 +7,22 @@ been validated against a live MISP instance and should not be treated as product
 
 The server does not implement event creation, attribute creation, sighting submission, tagging, publishing, raw MISP API proxying, write/admin tools, shell execution, or unrestricted filesystem access.
 
+## Policy and approval foundation
+
+Phase 7 adds policy enforcement primitives for future controlled-write workflows without adding
+write/admin MCP tools. The runtime policy environment variables are:
+
+- `AGENTIC_MISP_MCP_ROLE=read_only` by default. Supported roles are `read_only`,
+  `analyst_write`, `curator`, and `admin`.
+- `AGENTIC_MISP_MCP_ENABLE_WRITE=false` by default. With write mode disabled, all future
+  `write`, `admin`, `sync`, and `dangerous` actions are blocked even for elevated roles.
+- `AGENTIC_MISP_MCP_REQUIRE_APPROVAL=true` by default. Future role-allowed write/admin/sync
+  actions require approval when this is enabled.
+
+The current 13 tools are classified as `read` and remain allowed under `read_only`. Approval
+request data models exist only as an in-memory foundation; Phase 7 does not add persistent
+approval storage and cannot execute approved writes.
+
 ## MCP tool boundary
 
 Only these tools are exposed:
@@ -40,7 +56,7 @@ TLS verification is enabled by default with `MISP_VERIFY_TLS=true`. Disabling TL
 
 ## Audit logging
 
-Every MCP tool call writes one JSONL audit record, including failures. Audit records include tool name, sanitized arguments, status, duration, and error type/message. They do not include authorization headers or API keys.
+Every MCP tool call writes one JSONL audit record, including failures. Audit records include tool name, sanitized arguments, policy decision fields, status, duration, and error type/message. They do not include authorization headers or API keys.
 
 The audit log path is validated at startup. Its parent directory must already be writable or be
 creatable by the runtime user. Container examples mount `./logs` into `/app/logs` so logs persist

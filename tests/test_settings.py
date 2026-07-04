@@ -22,6 +22,9 @@ def test_settings_defaults(monkeypatch, tmp_path):
     assert settings.misp_event_attribute_limit == 50
     assert settings.misp_related_event_limit == 5
     assert str(settings.audit_log_path) == "logs/audit.jsonl"
+    assert settings.policy_role == "read_only"
+    assert settings.enable_write is False
+    assert settings.require_approval is True
 
 
 def test_missing_api_key_fails(monkeypatch):

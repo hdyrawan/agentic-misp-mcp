@@ -36,6 +36,9 @@ def check_configuration() -> ConfigCheckResult:
         f"OK MISP_EVENT_ATTRIBUTE_LIMIT={settings.misp_event_attribute_limit}",
         f"OK MISP_RELATED_EVENT_LIMIT={settings.misp_related_event_limit}",
         f"OK AGENTIC_MISP_MCP_LOG_LEVEL={settings.log_level}",
+        f"OK AGENTIC_MISP_MCP_ROLE={settings.policy_role}",
+        f"OK AGENTIC_MISP_MCP_ENABLE_WRITE={str(settings.enable_write).lower()}",
+        f"OK AGENTIC_MISP_MCP_REQUIRE_APPROVAL={str(settings.require_approval).lower()}",
     ]
 
     audit_error = validate_audit_log_path(settings.audit_log_path)
@@ -100,4 +103,10 @@ FIELD_TO_ENV = {
     "AGENTIC_MISP_MCP_AUDIT_LOG_PATH": "AGENTIC_MISP_MCP_AUDIT_LOG_PATH",
     "log_level": "AGENTIC_MISP_MCP_LOG_LEVEL",
     "AGENTIC_MISP_MCP_LOG_LEVEL": "AGENTIC_MISP_MCP_LOG_LEVEL",
+    "policy_role": "AGENTIC_MISP_MCP_ROLE",
+    "AGENTIC_MISP_MCP_ROLE": "AGENTIC_MISP_MCP_ROLE",
+    "enable_write": "AGENTIC_MISP_MCP_ENABLE_WRITE",
+    "AGENTIC_MISP_MCP_ENABLE_WRITE": "AGENTIC_MISP_MCP_ENABLE_WRITE",
+    "require_approval": "AGENTIC_MISP_MCP_REQUIRE_APPROVAL",
+    "AGENTIC_MISP_MCP_REQUIRE_APPROVAL": "AGENTIC_MISP_MCP_REQUIRE_APPROVAL",
 }

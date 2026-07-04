@@ -16,6 +16,9 @@ configuration without connecting to MISP.
 | `MISP_RELATED_EVENT_LIMIT` | No | `5` | Maximum related events expanded by investigation workflows. Must be between `0` and `100`. |
 | `AGENTIC_MISP_MCP_AUDIT_LOG_PATH` | No | `./logs/audit.jsonl` | JSONL audit log path. Parent directory must be writable or creatable. |
 | `AGENTIC_MISP_MCP_LOG_LEVEL` | No | `INFO` | Application log level. |
+| `AGENTIC_MISP_MCP_ROLE` | No | `read_only` | Policy role: `read_only`, `analyst_write`, `curator`, or `admin`. Phase 7 still exposes read-only tools only. |
+| `AGENTIC_MISP_MCP_ENABLE_WRITE` | No | `false` | Future write-mode gate. Keep `false`; Phase 7 does not implement write tools. |
+| `AGENTIC_MISP_MCP_REQUIRE_APPROVAL` | No | `true` | Require approval for future controlled write/admin/sync actions when enabled and role-allowed. |
 
 ## Example `.env`
 
@@ -30,7 +33,19 @@ MISP_EVENT_ATTRIBUTE_LIMIT=50
 MISP_RELATED_EVENT_LIMIT=5
 AGENTIC_MISP_MCP_AUDIT_LOG_PATH=./logs/audit.jsonl
 AGENTIC_MISP_MCP_LOG_LEVEL=INFO
+AGENTIC_MISP_MCP_ROLE=read_only
+AGENTIC_MISP_MCP_ENABLE_WRITE=false
+AGENTIC_MISP_MCP_REQUIRE_APPROVAL=true
 ```
+
+## Policy foundation
+
+Phase 7 adds a reusable policy and approval foundation for future controlled-write workflows,
+but the MCP server remains read-only. The current 13 MCP tools are classified as `read` and are
+allowed under the default `read_only` role. Future `write`, `admin`, `sync`, and `dangerous`
+actions are blocked unless write mode is explicitly enabled and the configured role permits the
+action. Approval decisions are modeled and audited, but no persistent approval storage or write
+execution exists yet.
 
 ## Validate configuration
 

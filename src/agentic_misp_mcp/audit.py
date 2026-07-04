@@ -9,6 +9,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, TypeVar
 
+from agentic_misp_mcp.policy.models import PolicyDecision
+
 T = TypeVar("T")
 
 SENSITIVE_KEYS = {"api_key", "authorization", "authkey", "headers", "misp_api_key", "token"}
@@ -57,6 +59,7 @@ async def audit_call(
     tool_name: str,
     arguments: Mapping[str, Any],
     call: Callable[[], Awaitable[T]],
+    policy_decision: PolicyDecision | Mapping[str, Any] | None = None,
 ) -> T:
     started = time.perf_counter()
     base_record: dict[str, Any] = {
@@ -64,6 +67,10 @@ async def audit_call(
         "tool": tool_name,
         "arguments": sanitize_for_audit(arguments),
     }
+    if policy_decision is not None:
+        policy_fields = _policy_audit_fields(policy_decision)
+        base_record["policy"] = policy_fields
+        base_record.update(policy_fields)
     try:
         result = await call()
     except Exception as exc:
@@ -101,3 +108,19 @@ def audited_tool(
         return await audit_call(audit_logger, tool_name, kwargs, lambda: func(**kwargs))
 
     return wrapper
+
+
+def _policy_audit_fields(policy_decision: PolicyDecision | Mapping[str, Any]) -> dict[str, Any]:
+    if isinstance(policy_decision, PolicyDecision):
+        return {
+            "role": policy_decision.role,
+            "action": policy_decision.action,
+            "allowed": policy_decision.allowed,
+            "approval_required": policy_decision.approval_required,
+        }
+    return {
+        "role": str(policy_decision.get("role", "")),
+        "action": str(policy_decision.get("action", "")),
+        "allowed": bool(policy_decision.get("allowed", False)),
+        "approval_required": bool(policy_decision.get("approval_required", False)),
+    }
