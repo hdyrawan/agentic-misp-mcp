@@ -9,13 +9,36 @@ It exists because agents should not need unrestricted MISP API access to help wi
 ## Status
 
 - Early development; APIs, outputs, and internals may still change.
-- Tested with mocked MISP responses only.
-- Live MISP version compatibility testing is pending; this is ready for live lab validation, not production.
+- Mocked test coverage exists for core workflows and policy paths.
+- First live read-only lab validation has passed against MISP 2.5.42 using Docker, stdio transport, and MCP Inspector.
+- Controlled write validation is still pending and must only be performed against an isolated lab MISP instance.
+- Broader MISP version compatibility testing is still pending.
+- Not production-ready.
 - Current MCP tool count: **19**.
 - Primary transport: **stdio**.
 - HTTP transport exists but is experimental.
 - Requires Python 3.11+.
 - License: MIT.
+
+## Live lab validation status
+
+| Area | Result | Notes |
+| --- | --- | --- |
+| MISP version check | Passed | `/servers/getVersion` returned HTTP 200 against MISP 2.5.42. |
+| Docker runtime | Passed | Image built locally and run with runtime-only environment variables. |
+| config-check | Passed | Configuration validated and API key was redacted. |
+| MCP transport | Passed | MCP Inspector connected over stdio to `docker run --rm -i ... --transport stdio`. |
+| `search_ioc` | Passed | Tested with both non-matching and matching IOCs. |
+| `investigate_ioc` | Passed | Returned verdict, confidence, related event context, warninglist status, and related IOCs. |
+| `summarize_event` | Passed | Summarized a real MISP event without returning unbounded raw event JSON. |
+| `generate_ioc_report` | Passed | Generated a deterministic IOC report from live MISP data. |
+| Audit logging | Passed | Successful calls and validation failures were written to JSONL audit logs. |
+| Controlled writes | Pending | Must be validated separately with `AGENTIC_MISP_MCP_ENABLE_WRITE=true` against an isolated lab only. |
+| Production deployment | Not validated | This project remains lab-tested, not production-certified. |
+
+The first positive live IOC test used `54.87.87.13`, which matched MISP event 187, "OSINT - NANHAISHU RATing the South China Sea". The generated IOC report classified the IOC as suspicious with medium confidence based on live MISP matches, actionable `to_ids` attributes, related event context, and extracted related IOCs.
+
+Because the first positive live test used historical OSINT data, analyst workflows should correlate hits with recent SIEM, EDR, DNS, proxy, or firewall telemetry before blocking or escalation.
 
 ## Safety model
 
@@ -123,18 +146,104 @@ agentic-misp-mcp config-check
 agentic-misp-mcp --transport stdio
 ```
 
-### Docker run
+### Docker usage
+
+This flow was used for the first live read-only lab validation against MISP 2.5.42. It uses
+generic paths — replace them with your own locations outside the repository.
+
+#### Build image
 
 ```bash
-docker build -t agentic-misp-mcp:local .
-docker run --rm \
-  -e MISP_URL=https://misp.example.local \
-  -e MISP_API_KEY=your_misp_api_key_here \
-  agentic-misp-mcp:local config-check
-
-docker run --rm -i --env-file .env -v "$PWD/logs:/app/logs" \
-  agentic-misp-mcp:local --transport stdio
+cd /path/to/agentic-misp-mcp
+docker build -t agentic-misp-mcp:live-test .
 ```
+
+#### Create env file outside the repository
+
+```bash
+mkdir -p /home/user/.config/agentic-misp-mcp
+cat > /home/user/.config/agentic-misp-mcp/live.env <<'EOF'
+MISP_URL=https://misp.lab.example
+MISP_API_KEY=replace_with_your_lab_api_key
+MISP_VERIFY_TLS=false
+AGENTIC_MISP_MCP_ROLE=read_only
+AGENTIC_MISP_MCP_ENABLE_WRITE=false
+AGENTIC_MISP_MCP_REQUIRE_APPROVAL=true
+AGENTIC_MISP_MCP_AUDIT_LOG_PATH=/app/logs/audit.jsonl
+EOF
+```
+
+`MISP_VERIFY_TLS=false` is lab-only, for a self-signed certificate on an isolated lab MISP
+instance. Do not use it for production-like environments; keep TLS verification enabled there.
+
+#### Create audit log directory
+
+```bash
+mkdir -p /home/user/.local/state/agentic-misp-mcp/logs
+```
+
+#### Run config-check
+
+```bash
+docker run --rm \
+  --env-file /home/user/.config/agentic-misp-mcp/live.env \
+  agentic-misp-mcp:live-test config-check
+```
+
+`config-check` does not connect to MISP and redacts the API key.
+
+#### Test MISP connectivity from inside the container
+
+```bash
+docker run --rm \
+  --env-file /home/user/.config/agentic-misp-mcp/live.env \
+  --entrypoint sh agentic-misp-mcp:live-test -c \
+  'curl -sk -o /dev/null -w "%{http_code}\n" -H "Authorization: $MISP_API_KEY" "$MISP_URL/servers/getVersion"'
+```
+
+A `200` response confirms the container can reach the MISP API before running any MCP tools.
+
+#### Run the MCP server over stdio
+
+```bash
+docker run --rm -i \
+  --env-file /home/user/.config/agentic-misp-mcp/live.env \
+  -v /home/user/.local/state/agentic-misp-mcp/logs:/app/logs \
+  agentic-misp-mcp:live-test --transport stdio
+```
+
+#### Run with MCP Inspector
+
+Live validation used MCP Inspector v0.22.0 against the stdio transport:
+
+```bash
+npx @modelcontextprotocol/inspector@0.22.0 \
+  docker run --rm -i \
+    --env-file /home/user/.config/agentic-misp-mcp/live.env \
+    -v /home/user/.local/state/agentic-misp-mcp/logs:/app/logs \
+    agentic-misp-mcp:live-test --transport stdio
+```
+
+#### Headless host access with SSH tunnel
+
+MCP Inspector serves its client UI and proxy on ports 6274 and 6277. When Inspector runs on a
+headless Linux host, forward both ports over SSH and open the UI from your workstation browser:
+
+```bash
+ssh -L 6274:localhost:6274 -L 6277:localhost:6277 user@headless-host
+```
+
+Then browse to `http://localhost:6274` on the workstation.
+
+#### Check audit logs
+
+```bash
+tail -n 20 /home/user/.local/state/agentic-misp-mcp/logs/audit.jsonl
+```
+
+Audit entries are JSONL, with sanitized arguments and policy decision fields. Both successful
+calls and validation failures (for example, a blank `check_warninglists` input failing with
+`ValueError: IOC value must not be blank`) are recorded.
 
 Do not bake secrets into the image. Pass credentials only at runtime.
 
