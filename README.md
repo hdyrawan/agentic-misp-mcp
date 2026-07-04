@@ -10,10 +10,11 @@ It exists because agents should not need unrestricted MISP API access to help wi
 
 - Early development; APIs, outputs, and internals may still change.
 - Tested with mocked MISP responses only.
-- Live MISP compatibility testing is pending.
+- Live MISP version compatibility testing is pending; this is ready for live lab validation, not production.
 - Current MCP tool count: **19**.
 - Primary transport: **stdio**.
 - HTTP transport exists but is experimental.
+- Requires Python 3.11+.
 - License: MIT.
 
 ## Safety model
@@ -29,6 +30,12 @@ This project is workflow-first, not endpoint-first.
 - No generic user/organisation/server/settings admin tools.
 - No shell execution or unrestricted filesystem tools.
 - Every MCP tool call is audited with sanitized arguments and policy decision fields.
+
+Important approval limitation: `approved=true` is a programmatic gate, not a complete
+human-in-the-loop approval mechanism by itself. Real HITL approval requires an external
+orchestrator that only submits approved calls after a human decision, or approval-token
+enforcement with `AGENTIC_MISP_MCP_APPROVAL_TOKEN`. For autonomous agents, configure an approval
+token so the calling agent cannot self-approve writes merely by setting `approved=true`.
 
 ## Current MCP tools
 
@@ -54,16 +61,21 @@ This project is workflow-first, not endpoint-first.
 - `generate_markdown_ioc_report(value)` — Markdown IOC report for analyst notes or escalation.
 - `generate_markdown_event_report(event_id)` — Markdown event report.
 
-### Controlled write and proposal tools
+### Proposal-only tools that never write to MISP
 
-These six tools are policy-gated. They are blocked unless write mode and role allow the action; write execution also requires explicit approval by default.
+These tools build reviewable payloads only. They are policy-gated, but they never invoke MISP write endpoints.
 
 - `propose_event(...)` — build an event creation proposal; never writes to MISP.
 - `propose_attribute(...)` — build an attribute creation proposal; never writes to MISP.
-- `submit_ioc_with_approval(..., approved=False)` — add an attribute only when policy and approval allow.
-- `add_sighting_with_approval(..., approved=False)` — add a sighting only when policy and approval allow.
-- `tag_event_with_approval(event_id, tag, approved=False)` — tag an event only when policy and approval allow.
-- `publish_event_with_approval(event_id, approved=False)` — publish an event only for curator/admin roles and approval.
+
+### Approval-gated write tools
+
+These tools are blocked unless write mode and role allow the action; write execution also requires explicit approval by default.
+
+- `submit_ioc_with_approval(..., approved=False, approval_token=None)` — add an attribute only when policy and approval allow.
+- `add_sighting_with_approval(..., approved=False, approval_token=None)` — add a sighting only when policy and approval allow.
+- `tag_event_with_approval(event_id, tag, approved=False, approval_token=None)` — tag an event only when policy and approval allow.
+- `publish_event_with_approval(event_id, approved=False, approval_token=None)` — publish an event only for curator/admin roles and approval.
 
 Write-tool results are explicit: `blocked`, `pending_approval`, or `executed`. There are no silent writes.
 
@@ -152,13 +164,16 @@ Do not bake secrets into the image. Pass credentials only at runtime.
 | `AGENTIC_MISP_MCP_ROLE` | No | `read_only` | `read_only`, `analyst_write`, `curator`, or `admin`. |
 | `AGENTIC_MISP_MCP_ENABLE_WRITE` | No | `false` | Global write-mode gate. |
 | `AGENTIC_MISP_MCP_REQUIRE_APPROVAL` | No | `true` | Require explicit `approved=true` for write execution. |
+| `AGENTIC_MISP_MCP_APPROVAL_TOKEN` | No | unset | Optional approval-token hardening. When set, approved write calls must include the matching `approval_token`; audit logs redact it. |
+| `AGENTIC_MISP_MCP_MAX_RESPONSE_BYTES` | No | `5242880` | Maximum MISP HTTP response body size, enforced before JSON parsing. |
+| `AGENTIC_MISP_MCP_ALLOW_INSECURE_HTTP_BIND` | No | `false` | Allows experimental HTTP transport to bind `0.0.0.0`; keep false unless behind authenticated TLS termination. |
 
 See `docs/configuration.md` for more examples.
 
 ## Security notes
 
 - Use stdio by default.
-- Treat HTTP transport as experimental. If you enable it, bind only to a trusted interface or place it behind authenticated TLS termination.
+- Treat HTTP transport as experimental. Binding to `0.0.0.0` is refused by default because HTTP mode has no built-in auth/TLS; use `127.0.0.1` or place it behind authenticated TLS termination and explicitly opt in.
 - Keep `.env`, audit logs, and API keys out of git.
 - Tests use mocked MISP responses only; do not add live-MISP tests without an explicit lab-validation phase.
 - See `SECURITY.md` and `docs/security.md` for reporting and deployment guidance.

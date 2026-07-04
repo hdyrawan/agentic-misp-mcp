@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from typing import Any
 
 import httpx
@@ -9,6 +10,7 @@ from agentic_misp_mcp.exceptions import (
     MISPClientError,
     MISPNotFoundError,
     MISPRateLimitError,
+    MISPResponseTooLargeError,
 )
 from agentic_misp_mcp.misp.queries import (
     attribute_search_payload,
@@ -58,10 +60,17 @@ class MISPClient:
         await self._client.aclose()
 
     async def _request(self, method: str, path: str, **kwargs: Any) -> Any:
+        response: httpx.Response | None = None
         try:
-            response = await self._client.request(method, path, **kwargs)
+            request = self._client.build_request(method, path, **kwargs)
+            response = await self._client.send(request, stream=True)
+            content = await self._read_bounded_response(response)
         except httpx.HTTPError as exc:
             raise MISPClientError(f"MISP request failed: {type(exc).__name__}") from exc
+        finally:
+            if response is not None:
+                await response.aclose()
+        assert response is not None
         if response.status_code in {401, 403}:
             raise MISPAuthenticationError("MISP authentication/authorization failed")
         if response.status_code == 404:
@@ -71,9 +80,33 @@ class MISPClient:
         if response.status_code >= 400:
             raise MISPClientError(f"MISP request failed with HTTP {response.status_code}")
         try:
-            return response.json()
+            return json.loads(content)
         except ValueError as exc:
             raise MISPClientError("MISP returned non-JSON response") from exc
+
+    async def _read_bounded_response(self, response: httpx.Response) -> bytes:
+        max_bytes = self.settings.max_response_bytes
+        content_length = response.headers.get("Content-Length")
+        if content_length is not None:
+            try:
+                declared_length = int(content_length)
+            except ValueError:
+                declared_length = None
+            if declared_length is not None and declared_length > max_bytes:
+                raise MISPResponseTooLargeError(
+                    f"MISP response exceeded configured limit of {max_bytes} bytes"
+                )
+
+        chunks: list[bytes] = []
+        total = 0
+        async for chunk in response.aiter_bytes():
+            total += len(chunk)
+            if total > max_bytes:
+                raise MISPResponseTooLargeError(
+                    f"MISP response exceeded configured limit of {max_bytes} bytes"
+                )
+            chunks.append(chunk)
+        return b"".join(chunks)
 
     async def search_attributes(self, value: str, limit: int) -> list[MISPAttributeSummary]:
         raw = await self._request(
@@ -144,12 +177,6 @@ class MISPClient:
     # Controlled write methods (Phase 8). Each maps to exactly one narrow MISP write
     # endpoint and is only ever invoked after policy allow + approval checks upstream.
     # There is no generic request proxy exposed here or through any MCP tool.
-
-    async def create_event(self, payload: dict[str, object]) -> MISPEventSummary:
-        raw = await self._request("POST", "/events/add", json=payload)
-        if not isinstance(raw, dict):
-            raise MISPClientError("MISP event creation response was not an object")
-        return parse_event(raw, attribute_limit=100)
 
     async def add_attribute(
         self, event_id: int, payload: dict[str, object]

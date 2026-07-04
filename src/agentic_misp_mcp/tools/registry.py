@@ -288,6 +288,7 @@ def register_tools(
         comment: str | None = None,
         to_ids: bool | None = None,
         approved: bool = False,
+        approval_token: str | None = None,
     ) -> dict[str, object]:
         """Submit an IOC (attribute) to MISP only when write is enabled, role permits write,
         and approval (when required) has been explicitly given. Otherwise returns a
@@ -303,6 +304,7 @@ def register_tools(
                 "comment": comment,
                 "to_ids": to_ids,
                 "approved": approved,
+                "approval_token": approval_token,
             },
             lambda decision: submit_ioc_with_approval_workflow(
                 client,
@@ -314,6 +316,8 @@ def register_tools(
                 comment=comment,
                 to_ids=to_ids,
                 approved=approved,
+                approval_token=approval_token,
+                expected_approval_token=settings.approval_token,
             ),
         )
 
@@ -324,6 +328,7 @@ def register_tools(
         sighting_type: str = "0",
         source: str | None = None,
         approved: bool = False,
+        approval_token: str | None = None,
     ) -> dict[str, object]:
         """Add a sighting to MISP only when policy and approval allow. Otherwise returns a
         blocked/proposal result."""
@@ -337,6 +342,7 @@ def register_tools(
                 "sighting_type": sighting_type,
                 "source": source,
                 "approved": approved,
+                "approval_token": approval_token,
             },
             lambda decision: add_sighting_with_approval_workflow(
                 client,
@@ -347,25 +353,38 @@ def register_tools(
                 sighting_type=sighting_type,
                 source=source,
                 approved=approved,
+                approval_token=approval_token,
+                expected_approval_token=settings.approval_token,
             ),
         )
 
     async def tag_event_with_approval(
-        event_id: int, tag: str, approved: bool = False
+        event_id: int, tag: str, approved: bool = False, approval_token: str | None = None
     ) -> dict[str, object]:
         """Tag a MISP event only when policy and approval allow. Otherwise returns a
         blocked/proposal result."""
         return await _audit_write_tool(
             "tag_event_with_approval",
             Action.WRITE,
-            {"event_id": event_id, "tag": tag, "approved": approved},
+            {
+                "event_id": event_id,
+                "tag": tag,
+                "approved": approved,
+                "approval_token": approval_token,
+            },
             lambda decision: tag_event_with_approval_workflow(
-                client, decision, event_id=event_id, tag=tag, approved=approved
+                client,
+                decision,
+                event_id=event_id,
+                tag=tag,
+                approved=approved,
+                approval_token=approval_token,
+                expected_approval_token=settings.approval_token,
             ),
         )
 
     async def publish_event_with_approval(
-        event_id: int, approved: bool = False
+        event_id: int, approved: bool = False, approval_token: str | None = None
     ) -> dict[str, object]:
         """Publish a MISP event only when policy and approval allow. Requires curator/
         admin-like permission and is always high-risk and approval-gated. Otherwise returns
@@ -373,9 +392,14 @@ def register_tools(
         return await _audit_write_tool(
             "publish_event_with_approval",
             Action.PUBLISH,
-            {"event_id": event_id, "approved": approved},
+            {"event_id": event_id, "approved": approved, "approval_token": approval_token},
             lambda decision: publish_event_with_approval_workflow(
-                client, decision, event_id=event_id, approved=approved
+                client,
+                decision,
+                event_id=event_id,
+                approved=approved,
+                approval_token=approval_token,
+                expected_approval_token=settings.approval_token,
             ),
         )
 

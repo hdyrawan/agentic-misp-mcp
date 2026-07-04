@@ -5,6 +5,8 @@ import json
 import pytest
 
 from agentic_misp_mcp.cli import main
+from agentic_misp_mcp.server import StartupConfigurationError, validate_http_bind_allowed
+from agentic_misp_mcp.settings import Settings
 
 MINIMAL_OPENAPI_SPEC = {
     "openapi": "3.0.0",
@@ -183,3 +185,21 @@ def test_openapi_inventory_reports_invalid_json(tmp_path):
         main(["openapi-inventory", "--input", str(bad_file)])
 
     assert exc.value.code == 2
+
+
+def test_http_bind_to_all_interfaces_blocked_by_default(monkeypatch, tmp_path):
+    _valid_env(monkeypatch, tmp_path)
+    settings = Settings()
+
+    with pytest.raises(StartupConfigurationError) as exc_info:
+        validate_http_bind_allowed(settings, "0.0.0.0")
+
+    assert "0.0.0.0" in str(exc_info.value)
+    assert "auth/TLS" in str(exc_info.value)
+
+
+def test_http_bind_to_loopback_allowed(monkeypatch, tmp_path):
+    _valid_env(monkeypatch, tmp_path)
+    settings = Settings()
+
+    validate_http_bind_allowed(settings, "127.0.0.1")

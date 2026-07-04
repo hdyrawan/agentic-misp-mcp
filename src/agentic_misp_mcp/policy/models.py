@@ -7,6 +7,8 @@ from uuid import uuid4
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from agentic_misp_mcp.security.sanitization import contains_secret_key_recursive
+
 
 class Role(StrEnum):
     """Policy roles for current and future MISP workflows."""
@@ -49,8 +51,7 @@ class ToolPolicy(BaseModel):
 class ApprovalRequest(BaseModel):
     """Future approval proposal envelope for controlled write workflows.
 
-    Phase 7 only models approval metadata. It does not persist approvals and does not execute
-    approved writes.
+    Approval metadata only. It does not persist approvals and does not execute approved writes.
     """
 
     model_config = ConfigDict(hide_input_in_errors=True)
@@ -69,12 +70,7 @@ class ApprovalRequest(BaseModel):
     def proposed_arguments_must_not_include_obvious_secrets(
         cls, value: dict[str, Any]
     ) -> dict[str, Any]:
-        sensitive_keys = {"api_key", "authorization", "authkey", "headers", "misp_api_key", "token"}
-        contains_unredacted_secret_key = any(
-            str(key).lower() in sensitive_keys and nested != "[REDACTED]"
-            for key, nested in value.items()
-        )
-        if contains_unredacted_secret_key:
+        if contains_secret_key_recursive(value):
             raise ValueError(
                 "approval proposals must not include secrets or authorization material"
             )

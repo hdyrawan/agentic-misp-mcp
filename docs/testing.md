@@ -27,7 +27,6 @@ These are the only MISP HTTP endpoints exercised anywhere in the test suite, all
 | `/events/view/{id}` | GET | `get_event` | `{"Event": {..., "Attribute": [...]}}`, attribute-limit truncation |
 | `/events/restSearch` | POST | `search_events_by_tag` | `{"response": [{"Event": {..., "Tag": [...]}}]}` |
 | `/warninglists/checkValue` | POST | `check_warninglists` | 404 → `not_available` fallback |
-| `/events/add` | POST | `create_event` | `{"Event": {"id": ..., "info": ..., "Attribute": []}}` |
 | `/attributes/add/{event_id}` | POST | `add_attribute` | `{"Attribute": {...}}` |
 | `/sightings/add` | POST | `add_sighting` | `{"Sighting": {...}}` |
 | `/events/addTag/{event_id}` | POST | `tag_event` | `{"saved": true, "message": "..."}` |
@@ -39,7 +38,7 @@ HTTP error normalization covered:
 - `404` → `MISPNotFoundError` (`test_not_found_normalized`), and a dedicated `not_available`
   fallback for the warninglist endpoint specifically (`test_warninglist_not_available_on_404`)
 
-Request bodies and the `Authorization` header are asserted on for the search, create-event,
+Request bodies and the `Authorization` header are asserted on for the search,
 add-attribute, and tag-event cases, confirming the API key is sent as a header and never leaks
 into the request body or a logged value.
 

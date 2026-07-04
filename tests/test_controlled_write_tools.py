@@ -298,3 +298,41 @@ async def test_no_secret_leakage_in_audit(monkeypatch, tmp_path):
 
     log_text = (tmp_path / "audit.jsonl").read_text()
     assert "test-secret-key" not in log_text
+
+
+@pytest.mark.asyncio
+async def test_approval_token_branches_when_configured(monkeypatch, tmp_path):
+    client = FakeWriteClient()
+    token = "human-approved-token"
+    mcp, _, _ = _register(
+        monkeypatch,
+        tmp_path,
+        client=client,
+        AGENTIC_MISP_MCP_ROLE="analyst_write",
+        AGENTIC_MISP_MCP_ENABLE_WRITE="true",
+        AGENTIC_MISP_MCP_REQUIRE_APPROVAL="true",
+        AGENTIC_MISP_MCP_APPROVAL_TOKEN=token,
+    )
+
+    pending = await mcp.tools["submit_ioc_with_approval"](1, "ip-dst", "1.2.3.4")
+    assert pending["status"] == "pending_approval"
+
+    missing = await mcp.tools["submit_ioc_with_approval"](1, "ip-dst", "1.2.3.4", approved=True)
+    assert missing["status"] == "blocked"
+    assert "token" in missing["policy"]["reason"]
+
+    wrong = await mcp.tools["submit_ioc_with_approval"](
+        1, "ip-dst", "1.2.3.4", approved=True, approval_token="wrong-token"
+    )
+    assert wrong["status"] == "blocked"
+
+    executed = await mcp.tools["submit_ioc_with_approval"](
+        1, "ip-dst", "1.2.3.4", approved=True, approval_token=token
+    )
+    assert executed["status"] == "executed"
+    assert client.calls == [("add_attribute", 1, {"type": "ip-dst", "value": "1.2.3.4"})]
+
+    audit_text = (tmp_path / "audit.jsonl").read_text()
+    assert token not in audit_text
+    assert "wrong-token" not in audit_text
+    assert '"approval_token": "[REDACTED]"' in audit_text
