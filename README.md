@@ -163,6 +163,16 @@ See `docs/configuration.md` for more examples.
 - Tests use mocked MISP responses only; do not add live-MISP tests without an explicit lab-validation phase.
 - See `SECURITY.md` and `docs/security.md` for reporting and deployment guidance.
 
+## Documentation
+
+- [`docs/security.md`](docs/security.md) — security model, tool boundary, audit logging.
+- [`docs/configuration.md`](docs/configuration.md) — full environment variable reference.
+- [`docs/testing.md`](docs/testing.md) — what the mocked test suite covers and does not cover yet.
+- [`docs/roles.md`](docs/roles.md) — `read_only` / `analyst_write` / `curator` / `admin` policy roles.
+- [`docs/approval-flow.md`](docs/approval-flow.md) — the `approved=false` → `pending_approval` → `approved=true` write flow, with examples.
+- [`docs/live-validation-plan.md`](docs/live-validation-plan.md) — the pending live MISP lab validation checklist.
+- [`docs/openapi-inventory.md`](docs/openapi-inventory.md) — sample MISP OpenAPI endpoint classification (planning only).
+
 ## Development
 
 ```bash
