@@ -12,8 +12,15 @@ It must not become a raw MISP API proxy.
 ## Project status
 
 - Early development.
-- `main` contains the `v0.2.0-beta.1` production-write beta candidate. It is suitable for isolated pilot validation only; it is not GA production-ready. Production deployment is not yet validated; see production-readiness.md for scope, requirements, and acceptance criteria.
-- Current MCP tool count: 19.
+- `main` contains the `v0.2.0-beta.1` production-write beta candidate. The
+  `hardening/v0.2.0-beta.2-operational-readiness` branch contains `v0.2.0-beta.2`, an
+  operational-readiness hardening release on top of it (config doctor, approval-store pruning,
+  rollback playbook, closed test gaps — no new MCP tools, no new MISP write capability). Both are
+  suitable for isolated pilot validation only; neither is GA production-ready. Production
+  deployment is not yet validated; see production-readiness.md for scope, requirements, and
+  acceptance criteria.
+- Current MCP tool count: 19 (unchanged in `v0.2.0-beta.2`; the two new operator commands below are
+  CLI-only, not MCP tools).
 - Primary transport: stdio.
 - HTTP transport is experimental.
 - Python 3.11+.
@@ -21,7 +28,20 @@ It must not become a raw MISP API proxy.
 - Automated tests use mocked MISP responses, plus live-lab validation (see below).
 - Live read-only lab validation passed against MISP 2.5.42 using Docker, stdio, and MCP Inspector.
 - Core controlled-write validation passed in the same lab: submit_ioc_with_approval, add_sighting_with_approval, tag_event_with_approval, publish_event_with_approval, plus policy blocking. Two real bugs found during that pass are fixed (see "Live validation notes" below).
-- Still pending: propose_event/propose_attribute payload validation, large event/result-set behavior, rate-limit/timeout/TLS failure modes, warninglist endpoint compatibility, broader MISP version compatibility, and final sign-off.
+- Still pending (live evidence, not mocked): propose_event/propose_attribute payload validation, large event/result-set behavior at realistic scale, rate-limit/timeout/TLS failure modes, warninglist endpoint compatibility, broader MISP version compatibility, and final sign-off. `v0.2.0-beta.2` closed the large-result/rate-limit/warninglist-hit/warninglist-not_available gaps with mocked/controlled tests only (see `tests/test_operational_gap_closure.py` and `docs/live-validation-report-v0.2.0-beta.2.md`).
+
+## v0.2.0-beta.2 operational-readiness hardening
+
+- `agentic-misp-mcp config doctor` — PASS/WARN/FAIL operational-readiness checks beyond
+  `config-check`: write/approval-mode pairing, publish/role pairing, approval-store and audit-log
+  permission safety, production write allowlist coverage, approval TTL length, temp paths, and
+  leftover lab tokens in production mode. Never connects to MISP, never prints secrets, exits
+  nonzero on any FAIL.
+- `agentic-misp-mcp approvals prune --older-than <duration> [--vacuum]` — operator-CLI-only;
+  deletes old terminal (used/rejected/expired) approval records past an age threshold
+  (`7d`/`30d`/`24h`/`3600s`-style durations); never deletes pending/approved records; not exposed
+  through any MCP tool.
+- `docs/rollback.md` — rollback playbook for a mistaken controlled write.
 
 ## Safety boundaries
 
@@ -217,6 +237,17 @@ Still pending:
 - final sign-off (docs/live-validation-plan.md section 9).
 
 This is lab validation evidence, not a production certification.
+
+## v0.2.0-beta.2 live validation notes
+
+`config doctor` and `approvals prune` were both run against the same MISP 2.5.42 lab used above,
+plus a read-only regression smoke test (check_warninglists, search_attributes) confirming
+beta.2's additive-only CLI changes did not regress the existing read-only path. No bugs found.
+See docs/live-validation-report-v0.2.0-beta.2.md for full evidence. The HTTP 429/large-result/
+warninglist-hit/warninglist-not_available gaps listed as "still pending" above were closed with
+mocked/controlled tests only in beta.2 (tests/test_operational_gap_closure.py), not with live
+reproduction — reproducing a real 429 or an oversized live MISP result was treated as out of
+scope (no DoS-style testing).
 
 ## Known limitation
 

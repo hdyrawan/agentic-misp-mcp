@@ -9,6 +9,7 @@ from agentic_misp_mcp.audit import AuditLogger
 from agentic_misp_mcp.misp.warninglists import WarninglistCheckResult
 from agentic_misp_mcp.models.misp import MISPAttributeSummary, MISPEventSummary
 from agentic_misp_mcp.tools.registry import ALLOWED_TOOL_NAMES, register_tools
+from agentic_misp_mcp.workflows.controlled_write import REQUIRED_ROLE_BY_TOOL
 
 
 class FakeMCP:
@@ -203,3 +204,41 @@ async def test_existing_v01_and_phase_2_tools_still_registered(settings, tmp_pat
         "generate_ioc_report",
     ):
         assert name in mcp.tools
+
+
+@pytest.mark.asyncio
+async def test_write_tool_count_unchanged_at_six(settings, tmp_path):
+    """v0.2.0-beta.2 adds config doctor and approvals prune as CLI-only operator commands.
+    Neither is an MCP tool, so the write-tool surface must stay exactly the same six tools
+    it has been since Phase 8."""
+    mcp = FakeMCP()
+    audit = AuditLogger(tmp_path / "audit.jsonl")
+    register_tools(mcp, client=FakeClient(), settings=settings, audit_logger=audit)
+
+    assert set(REQUIRED_ROLE_BY_TOOL) == {
+        "propose_event",
+        "propose_attribute",
+        "submit_ioc_with_approval",
+        "add_sighting_with_approval",
+        "tag_event_with_approval",
+        "publish_event_with_approval",
+    }
+    assert len(REQUIRED_ROLE_BY_TOOL) == 6
+    for name in REQUIRED_ROLE_BY_TOOL:
+        assert name in mcp.tools
+
+
+@pytest.mark.asyncio
+async def test_no_config_doctor_or_approvals_prune_mcp_tools_exist(settings, tmp_path):
+    """Config doctor and approvals prune are operator-CLI-only (see cli.py/cli_approvals.py)
+    and must never be reachable as MCP tools."""
+    mcp = FakeMCP()
+    audit = AuditLogger(tmp_path / "audit.jsonl")
+    register_tools(mcp, client=FakeClient(), settings=settings, audit_logger=audit)
+
+    for name in mcp.tools:
+        lowered = name.lower()
+        assert "doctor" not in lowered
+        assert "prune" not in lowered
+        assert "vacuum" not in lowered
+    assert len(mcp.tools) == 19

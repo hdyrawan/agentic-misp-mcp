@@ -3,7 +3,19 @@
 Project: agentic-misp-mcp
 
 Current status:
-- Current `main` contains the `v0.2.0-beta.1` production-write beta candidate: opt-in
+- Current hardening branch `hardening/v0.2.0-beta.2-operational-readiness` contains the
+  `v0.2.0-beta.2` operational-readiness candidate on top of `v0.2.0-beta.1`: adds
+  `agentic-misp-mcp config doctor` (PASS/WARN/FAIL operational-readiness checks, secrets
+  redacted, nonzero exit on `FAIL`), `agentic-misp-mcp approvals prune --older-than <duration>
+  [--vacuum]` (operator-CLI-only approval-store maintenance, never exposed as an MCP tool),
+  `docs/rollback.md`, expanded Docker production guidance, and mocked/controlled test coverage
+  closing four `v0.2.0-beta.1` live-validation gaps (HTTP 429, large-result truncation, positive
+  warninglist hit, warninglist `not_available`). No MCP tools were added or changed; the MCP tool
+  count and write-tool count (6) remain unchanged. Not yet merged to `main`; not GA
+  production-ready. See `docs/live-validation-report-v0.2.0-beta.2.md` for live validation
+  evidence (config doctor / approvals prune run against the same lab used for beta.1, plus a
+  read-only regression smoke test — no bugs found).
+- `main` contains the `v0.2.0-beta.1` production-write beta candidate: opt-in
   `AGENTIC_MISP_MCP_APPROVAL_MODE=production` adds SQLite approval records, CLI-only
   approve/reject, one-time redemption, exact operation hashes, TTL expiry, replay/payload-swap
   blocking, publish kill switch, and type/category/tag guardrails for the four existing
@@ -83,8 +95,10 @@ Current status:
   `AGENTIC_MISP_MCP_APPROVAL_MODE=production` is explicitly configured. Suitable for isolated
   pilot validation; not GA production-ready.
 
-Current tests: 166 passed before this documentation hardening pass; re-run the quality gate before tagging.
-Current MCP tool count: 19.
+Current tests: 217 passed on the `hardening/v0.2.0-beta.2-operational-readiness` branch (up from
+166 on `main` at the start of this pass); re-run the quality gate before tagging.
+Current MCP tool count: 19 (unchanged; `config doctor` and `approvals prune` are CLI-only, not
+MCP tools).
 Current license: MIT.
 
 Current MCP tools:
@@ -128,4 +142,8 @@ Next steps:
 - Complete the `v0.2.0-beta.1` live beta validation checklist in
   `docs/live-beta-validation-v0.2.0-beta.1.md`, including read-only edge cases and production
   approval-mode replay/hash-mismatch/wrong-tool/publish/allowlist/audit checks.
+- Merge `hardening/v0.2.0-beta.2-operational-readiness` and tag `v0.2.0-beta.2` once reviewed.
 - Broader MISP version compatibility testing beyond `2.5.42`.
+- Live (not just mocked) evidence for HTTP 429, large-result truncation at realistic scale, and a
+  positive warninglist hit remains open — see `docs/production-readiness.md`'s release/sign-off
+  checklist and `docs/ga-production-readiness-plan.md` for the path to GA.

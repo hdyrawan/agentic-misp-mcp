@@ -353,6 +353,41 @@ class SqliteApprovalStore:
             )
             return cursor.rowcount
 
+    def prune(
+        self, *, older_than_seconds: int, vacuum: bool = False, now: datetime | None = None
+    ) -> int:
+        """Delete old terminal (used/rejected/expired) records. Never touches pending/approved.
+
+        Operator-CLI-only maintenance; not reachable through any MCP tool.
+        """
+        self.expire_stale(now=now)
+        now = now or datetime.now(timezone.utc)  # noqa: UP017
+        cutoff = _format_dt(now - timedelta(seconds=older_than_seconds))
+        with self._connect() as conn:
+            cursor = conn.execute(
+                """
+                DELETE FROM approvals
+                WHERE (status = ? AND used_at IS NOT NULL AND used_at <= ?)
+                   OR (status = ? AND rejected_at IS NOT NULL AND rejected_at <= ?)
+                   OR (status = ? AND expires_at <= ?)
+                """,
+                (
+                    ApprovalStatus.USED.value,
+                    cutoff,
+                    ApprovalStatus.REJECTED.value,
+                    cutoff,
+                    ApprovalStatus.EXPIRED.value,
+                    cutoff,
+                ),
+            )
+            deleted = cursor.rowcount
+        if vacuum:
+            # VACUUM cannot run inside a pending transaction, so use a fresh connection
+            # after the delete above has already been committed.
+            with self._connect() as conn:
+                conn.execute("VACUUM")
+        return deleted
+
     def _initialize(self) -> None:
         with self._connect() as conn:
             conn.execute(
