@@ -25,7 +25,7 @@ summarizing/explaining MISP events — it is **not** a raw MISP API proxy.
 
 ### MCP tools
 
-10 analyst-oriented tools are currently exposed:
+13 analyst-oriented tools are currently exposed:
 
 - `search_ioc(value: str, limit: int = 20)`
 - `investigate_ioc(value: str, limit: int = 20)`
@@ -37,6 +37,9 @@ summarizing/explaining MISP events — it is **not** a raw MISP API proxy.
 - `extract_event_iocs(event_id: int, limit: int = 100)`
 - `explain_event_context(event_id: int)`
 - `find_events_by_tag(tag: str, limit: int = 20)`
+- `generate_event_report(event_id: int)`
+- `generate_markdown_ioc_report(value: str)`
+- `generate_markdown_event_report(event_id: int)`
 
 ## Non-goals
 

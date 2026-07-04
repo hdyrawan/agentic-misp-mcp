@@ -42,12 +42,12 @@ class FakeClient:
 
 
 @pytest.mark.asyncio
-async def test_exactly_ten_tools_registered_and_audited(settings, tmp_path):
+async def test_exactly_thirteen_tools_registered_and_audited(settings, tmp_path):
     mcp = FakeMCP()
     audit = AuditLogger(tmp_path / "audit.jsonl")
     register_tools(mcp, client=FakeClient(), settings=settings, audit_logger=audit)
 
-    assert len(ALLOWED_TOOL_NAMES) == 10
+    assert len(ALLOWED_TOOL_NAMES) == 13
     assert set(mcp.tools) == ALLOWED_TOOL_NAMES
 
     result = await mcp.tools["search_ioc"]("1.2.3.4", 20)
@@ -95,6 +95,33 @@ async def test_all_phase_3_tools_are_registered_and_audited(settings, tmp_path):
     for call in calls.values():
         result = await call()
         assert isinstance(result, dict)
+
+    lines = (tmp_path / "audit.jsonl").read_text().strip().splitlines()
+    audited_tools = {json.loads(line)["tool"] for line in lines}
+    assert audited_tools == set(calls)
+    assert all(json.loads(line)["success"] is True for line in lines)
+
+
+@pytest.mark.asyncio
+async def test_all_phase_4_report_tools_are_registered_and_audited(settings, tmp_path):
+    mcp = FakeMCP()
+    audit = AuditLogger(tmp_path / "audit.jsonl")
+    register_tools(mcp, client=FakeClient(), settings=settings, audit_logger=audit)
+
+    calls = {
+        "generate_event_report": lambda: mcp.tools["generate_event_report"](1),
+        "generate_markdown_ioc_report": lambda: mcp.tools["generate_markdown_ioc_report"](
+            "1.2.3.4"
+        ),
+        "generate_markdown_event_report": lambda: mcp.tools["generate_markdown_event_report"](1),
+    }
+    results = {}
+    for name, call in calls.items():
+        results[name] = await call()
+
+    assert isinstance(results["generate_event_report"], dict)
+    assert isinstance(results["generate_markdown_ioc_report"], str)
+    assert isinstance(results["generate_markdown_event_report"], str)
 
     lines = (tmp_path / "audit.jsonl").read_text().strip().splitlines()
     audited_tools = {json.loads(line)["tool"] for line in lines}
