@@ -47,6 +47,15 @@ def parse_warninglist_response(raw: Any) -> WarninglistCheckResult:
             return WarninglistCheckResult(
                 status="not_available", message=str(raw.get("message") or "")
             )
+        # MISP 2.5.42's actual `/warninglists/checkValue` positive-hit shape (observed during
+        # v0.2.0-rc.1 live lab validation): a dict keyed by the queried value, mapping to a
+        # list of match objects, e.g. {"10.1.2.3": [{"id": "88", "name": "...", "matched": "..."}]}.
+        # A miss returns `[]`, handled by the list branch below; this only ever fires for a hit.
+        if raw and all(isinstance(entries, list) for entries in raw.values()):
+            matches = [
+                entry for entries in raw.values() for entry in entries if isinstance(entry, dict)
+            ]
+            return WarninglistCheckResult(status="available", hit=bool(matches), matches=matches)
     if isinstance(raw, list):
         return WarninglistCheckResult(status="available", hit=bool(raw), matches=raw)
     return WarninglistCheckResult(

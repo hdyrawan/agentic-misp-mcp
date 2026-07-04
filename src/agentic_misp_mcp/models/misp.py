@@ -44,6 +44,8 @@ class MISPSightingSummary(BaseModel):
     event_id: int | None = None
     attribute_id: str | None = None
     type: str | None = None
+    saved: bool = False
+    message: str | None = None
 
 
 class MISPTagResult(BaseModel):
@@ -122,6 +124,10 @@ def parse_event(raw: dict[str, Any], attribute_limit: int) -> MISPEventSummary:
 
 
 def parse_sighting(raw: dict[str, Any]) -> MISPSightingSummary:
+    # MISP answers HTTP 200 with no `Sighting` key (just a `message`, e.g. "No valid
+    # attributes found") when it rejects a sighting it cannot attach to a real attribute.
+    # That is not distinguishable from a real success by status code alone.
+    saved = "Sighting" in raw
     sighting = raw.get("Sighting", raw)
     return MISPSightingSummary(
         id=str(sighting.get("id")) if sighting.get("id") is not None else None,
@@ -131,6 +137,8 @@ def parse_sighting(raw: dict[str, Any]) -> MISPSightingSummary:
             str(sighting.get("attribute_id")) if sighting.get("attribute_id") is not None else None
         ),
         type=sighting.get("type"),
+        saved=saved,
+        message=None if saved else str(raw.get("message") or raw.get("name") or ""),
     )
 
 
