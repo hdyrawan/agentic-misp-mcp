@@ -7,6 +7,14 @@ live MISP compatibility testing is still pending.
 
 ## Unreleased
 
+### Fixed
+
+- Fixed audit records for blocked policy decisions (for example a write attempted while
+  read-only or with `AGENTIC_MISP_MCP_ENABLE_WRITE=false`) incorrectly logging `success: true`.
+  Blocked attempts (`policy.allowed == false`) now log `success: false` and a distinct
+  `outcome: "blocked"`, separate from `outcome: "error"` for runtime exceptions. Found during
+  first live read-only MISP validation.
+
 ### Security hardening before live lab validation
 
 ### Added

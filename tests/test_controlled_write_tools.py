@@ -159,8 +159,38 @@ async def test_default_read_only_blocks_all_write_tools(monkeypatch, tmp_path):
     assert len(lines) == len(results)
     for line in lines:
         record = json.loads(line)
-        assert record["success"] is True
+        assert record["success"] is False
+        assert record["outcome"] == "blocked"
         assert record["allowed"] is False
+        assert record["role"] == "read_only"
+
+
+@pytest.mark.asyncio
+async def test_blocked_submit_ioc_audit_record_is_not_success(monkeypatch, tmp_path):
+    """Read-only + write-disabled blocks must be audited as blocked, not success."""
+    client = FakeWriteClient()
+    mcp, _, _ = _register(monkeypatch, tmp_path, client=client)
+
+    result = await mcp.tools["submit_ioc_with_approval"](
+        1, "ip-dst", "1.2.3.4", approval_token="super-secret-token"
+    )
+
+    assert result["status"] == "blocked"
+    assert result["policy"]["allowed"] is False
+    assert client.calls == []
+
+    lines = (tmp_path / "audit.jsonl").read_text().strip().splitlines()
+    assert len(lines) == 1
+    record = json.loads(lines[0])
+
+    assert record["tool"] == "submit_ioc_with_approval"
+    assert record["action"] == "write"
+    assert record["allowed"] is False
+    assert record["role"] == "read_only"
+    assert record["success"] is False
+    assert record.get("outcome") == "blocked"
+    assert record["arguments"]["approval_token"] == "[REDACTED]"
+    assert "super-secret-token" not in (tmp_path / "audit.jsonl").read_text()
 
 
 @pytest.mark.asyncio
