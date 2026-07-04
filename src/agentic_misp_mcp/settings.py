@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Literal
+from typing import Annotated, Literal
 
 from pydantic import AnyHttpUrl, Field, field_validator, model_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 
 class Settings(BaseSettings):
@@ -45,6 +45,26 @@ class Settings(BaseSettings):
     approval_token: str | None = Field(
         default=None, validation_alias="AGENTIC_MISP_MCP_APPROVAL_TOKEN"
     )
+    approval_mode: Literal["lab", "production"] = Field(
+        default="lab", validation_alias="AGENTIC_MISP_MCP_APPROVAL_MODE"
+    )
+    approval_store_path: Path = Field(
+        default=Path("./approvals.sqlite3"),
+        validation_alias="AGENTIC_MISP_MCP_APPROVAL_STORE_PATH",
+    )
+    approval_ttl_seconds: int = Field(
+        default=900, validation_alias="AGENTIC_MISP_MCP_APPROVAL_TTL_SECONDS", ge=1
+    )
+    enable_publish: bool = Field(default=False, validation_alias="AGENTIC_MISP_MCP_ENABLE_PUBLISH")
+    allowed_attribute_types: Annotated[tuple[str, ...], NoDecode] = Field(
+        default=(), validation_alias="AGENTIC_MISP_MCP_ALLOWED_ATTRIBUTE_TYPES"
+    )
+    allowed_attribute_categories: Annotated[tuple[str, ...], NoDecode] = Field(
+        default=(), validation_alias="AGENTIC_MISP_MCP_ALLOWED_ATTRIBUTE_CATEGORIES"
+    )
+    allowed_tags: Annotated[tuple[str, ...], NoDecode] = Field(
+        default=(), validation_alias="AGENTIC_MISP_MCP_ALLOWED_TAGS"
+    )
     max_response_bytes: int = Field(
         default=5_242_880, validation_alias="AGENTIC_MISP_MCP_MAX_RESPONSE_BYTES", ge=1024
     )
@@ -74,6 +94,22 @@ class Settings(BaseSettings):
             return None
         stripped = value.strip()
         return stripped or None
+
+    @field_validator(
+        "allowed_attribute_types",
+        "allowed_attribute_categories",
+        "allowed_tags",
+        mode="before",
+    )
+    @classmethod
+    def parse_csv_allowlist(cls, value: object) -> tuple[str, ...]:
+        if value is None or value == "":
+            return ()
+        if isinstance(value, str):
+            return tuple(item.strip() for item in value.split(",") if item.strip())
+        if isinstance(value, (list, tuple, set)):
+            return tuple(str(item).strip() for item in value if str(item).strip())
+        raise TypeError("allowlist must be a comma-separated string")
 
     @model_validator(mode="after")
     def limits_must_be_consistent(self) -> Settings:

@@ -74,8 +74,11 @@ async def audit_call(
     # `workflows/controlled_write.py`'s `status: "failed"` result. That is neither a policy
     # block nor a real success, so it gets its own outcome rather than being recorded as
     # `success: true`.
-    tool_reported_failure = isinstance(result, Mapping) and result.get("status") == "failed"
-    if not policy_allowed:
+    result_status = result.get("status") if isinstance(result, Mapping) else None
+    tool_reported_failure = result_status == "failed"
+    tool_reported_block = result_status == "blocked"
+    approval_fields = _approval_audit_fields(result) if isinstance(result, Mapping) else {}
+    if not policy_allowed or tool_reported_block:
         outcome = "blocked"
     elif tool_reported_failure:
         outcome = "failed"
@@ -87,6 +90,7 @@ async def audit_call(
             "success": outcome == "success",
             "outcome": outcome,
             "duration_ms": duration_ms,
+            **approval_fields,
             "error_type": None,
             "error_message": None,
         }
@@ -120,3 +124,11 @@ def _policy_audit_fields(policy_decision: PolicyDecision | Mapping[str, Any]) ->
         "allowed": bool(policy_decision.get("allowed", False)),
         "approval_required": bool(policy_decision.get("approval_required", False)),
     }
+
+
+def _approval_audit_fields(result: Mapping[str, Any]) -> dict[str, Any]:
+    fields: dict[str, Any] = {}
+    for key in ("approval_request_id", "operation_hash", "approval_status"):
+        if key in result:
+            fields[key] = result[key]
+    return fields

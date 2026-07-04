@@ -3,6 +3,7 @@
 .env.*
 !.env.example
 !.env.production.example
+!.env.production-write.example
 
 # Python
 .venv/

@@ -110,3 +110,12 @@ behavior for the six controlled write tools, and only when `AGENTIC_MISP_MCP_ENA
 All ✅ write-tool cells above additionally require `AGENTIC_MISP_MCP_ENABLE_WRITE=true`, and
 (when `AGENTIC_MISP_MCP_REQUIRE_APPROVAL=true`, the default) an explicit `approved=true` on a
 second call — see [`docs/approval-flow.md`](approval-flow.md).
+
+
+## Publish kill switch and production approval mode
+
+`publish_event_with_approval` now requires both a `curator`/`admin` role and `AGENTIC_MISP_MCP_ENABLE_PUBLISH=true`. The publish kill switch defaults to `false`, independent of role and `AGENTIC_MISP_MCP_ENABLE_WRITE`.
+
+For production-write pilots, set `AGENTIC_MISP_MCP_APPROVAL_MODE=production`. This does not add roles or tools; it changes only the four write-executing approval tools so they require an operator-approved, one-time-use `approval_request_id`. Lab mode remains the default and preserves the legacy `approved=true` behavior.
+
+Operationally, prefer separate deployments and MISP API keys per role: read-only, analyst-write, and curator-publish. MISP-side RBAC remains authoritative; this project's role setting does not expand the configured API key's MISP permissions.

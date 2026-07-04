@@ -6,6 +6,7 @@ from typing import Any
 
 from pydantic import ValidationError
 
+from agentic_misp_mcp.policy.approval_store import ApprovalStoreError, SqliteApprovalStore
 from agentic_misp_mcp.settings import Settings
 
 
@@ -39,12 +40,26 @@ def check_configuration() -> ConfigCheckResult:
         f"OK AGENTIC_MISP_MCP_ROLE={settings.policy_role}",
         f"OK AGENTIC_MISP_MCP_ENABLE_WRITE={str(settings.enable_write).lower()}",
         f"OK AGENTIC_MISP_MCP_REQUIRE_APPROVAL={str(settings.require_approval).lower()}",
+        f"OK AGENTIC_MISP_MCP_APPROVAL_MODE={settings.approval_mode}",
+        f"OK AGENTIC_MISP_MCP_APPROVAL_STORE_PATH={settings.approval_store_path}",
+        f"OK AGENTIC_MISP_MCP_APPROVAL_TTL_SECONDS={settings.approval_ttl_seconds}",
+        f"OK AGENTIC_MISP_MCP_ENABLE_PUBLISH={str(settings.enable_publish).lower()}",
+        "OK AGENTIC_MISP_MCP_ALLOWED_ATTRIBUTE_TYPES="
+        f"{','.join(settings.allowed_attribute_types) or 'not set'}",
+        f"OK AGENTIC_MISP_MCP_ALLOWED_TAGS={','.join(settings.allowed_tags) or 'not set'}",
         "OK AGENTIC_MISP_MCP_APPROVAL_TOKEN="
         f"{'set ([REDACTED])' if settings.approval_token else 'not set'}",
         f"OK AGENTIC_MISP_MCP_MAX_RESPONSE_BYTES={settings.max_response_bytes}",
         "OK AGENTIC_MISP_MCP_ALLOW_INSECURE_HTTP_BIND="
         f"{str(settings.allow_insecure_http_bind).lower()}",
     ]
+
+    if settings.approval_mode == "production":
+        try:
+            SqliteApprovalStore(settings.approval_store_path)
+        except ApprovalStoreError as exc:
+            lines.append(f"ERROR AGENTIC_MISP_MCP_APPROVAL_STORE_PATH: {exc}")
+            return ConfigCheckResult(ok=False, lines=lines)
 
     audit_error = validate_audit_log_path(settings.audit_log_path)
     if audit_error:
@@ -116,6 +131,22 @@ FIELD_TO_ENV = {
     "AGENTIC_MISP_MCP_REQUIRE_APPROVAL": "AGENTIC_MISP_MCP_REQUIRE_APPROVAL",
     "approval_token": "AGENTIC_MISP_MCP_APPROVAL_TOKEN",
     "AGENTIC_MISP_MCP_APPROVAL_TOKEN": "AGENTIC_MISP_MCP_APPROVAL_TOKEN",
+    "approval_mode": "AGENTIC_MISP_MCP_APPROVAL_MODE",
+    "AGENTIC_MISP_MCP_APPROVAL_MODE": "AGENTIC_MISP_MCP_APPROVAL_MODE",
+    "approval_store_path": "AGENTIC_MISP_MCP_APPROVAL_STORE_PATH",
+    "AGENTIC_MISP_MCP_APPROVAL_STORE_PATH": "AGENTIC_MISP_MCP_APPROVAL_STORE_PATH",
+    "approval_ttl_seconds": "AGENTIC_MISP_MCP_APPROVAL_TTL_SECONDS",
+    "AGENTIC_MISP_MCP_APPROVAL_TTL_SECONDS": "AGENTIC_MISP_MCP_APPROVAL_TTL_SECONDS",
+    "enable_publish": "AGENTIC_MISP_MCP_ENABLE_PUBLISH",
+    "AGENTIC_MISP_MCP_ENABLE_PUBLISH": "AGENTIC_MISP_MCP_ENABLE_PUBLISH",
+    "allowed_attribute_types": "AGENTIC_MISP_MCP_ALLOWED_ATTRIBUTE_TYPES",
+    "AGENTIC_MISP_MCP_ALLOWED_ATTRIBUTE_TYPES": "AGENTIC_MISP_MCP_ALLOWED_ATTRIBUTE_TYPES",
+    "allowed_attribute_categories": "AGENTIC_MISP_MCP_ALLOWED_ATTRIBUTE_CATEGORIES",
+    "AGENTIC_MISP_MCP_ALLOWED_ATTRIBUTE_CATEGORIES": (
+        "AGENTIC_MISP_MCP_ALLOWED_ATTRIBUTE_CATEGORIES"
+    ),
+    "allowed_tags": "AGENTIC_MISP_MCP_ALLOWED_TAGS",
+    "AGENTIC_MISP_MCP_ALLOWED_TAGS": "AGENTIC_MISP_MCP_ALLOWED_TAGS",
     "max_response_bytes": "AGENTIC_MISP_MCP_MAX_RESPONSE_BYTES",
     "AGENTIC_MISP_MCP_MAX_RESPONSE_BYTES": "AGENTIC_MISP_MCP_MAX_RESPONSE_BYTES",
     "allow_insecure_http_bind": "AGENTIC_MISP_MCP_ALLOW_INSECURE_HTTP_BIND",

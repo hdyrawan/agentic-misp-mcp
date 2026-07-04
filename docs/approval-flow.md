@@ -260,8 +260,28 @@ Only this second call invokes `MISPClient.publish_event`.
   four `_with_approval` tools.
 - Always surface the full `pending_approval` payload — risk, required role, and proposed
   arguments — to the human before making a second call.
-- Never synthesize or guess a human approval. Only pass `approved=true` after receiving an
-  explicit "yes"/approve instruction for that specific proposed action.
+- In lab mode, never synthesize or guess a human approval. Only pass `approved=true` after
+  receiving an explicit "yes"/approve instruction for that specific proposed action. In
+  production mode, do not rely on `approved=true`; use only an operator-approved
+  `approval_request_id`.
 - Treat `publish_event_with_approval` with extra caution: it is the only `high`-risk tool and
   the only one requiring `curator`/`admin`.
 - Expect — and check — an audit log entry for every call, including `blocked` ones.
+
+
+## Production approval mode (`v0.2.0-beta.1`)
+
+The lab flow above remains the default under `AGENTIC_MISP_MCP_APPROVAL_MODE=lab`. `AGENTIC_MISP_MCP_APPROVAL_TOKEN` is only an optional lab/shared-secret control; it is not the production approval mechanism. Production pilots must explicitly set `AGENTIC_MISP_MCP_APPROVAL_MODE=production`. In production mode, `approved=true` alone is blocked and never executes a MISP write, even if `AGENTIC_MISP_MCP_REQUIRE_APPROVAL=false`. The caller must provide an operator-approved `approval_request_id` for execution.
+
+A first production-mode call without `approval_request_id` creates a pending SQLite approval record and returns `approval_request_id`, `operation_hash`, and `approval_status: pending`. The operation hash is computed from the canonical business operation object (`tool` plus normalized arguments), not audit-sanitized data and not timestamp/request metadata.
+
+Only the operator CLI can approve or reject records:
+
+```bash
+agentic-misp-mcp approvals list --status pending
+agentic-misp-mcp approvals show <request_id>
+agentic-misp-mcp approvals approve <request_id> --approved-by NAME
+agentic-misp-mcp approvals reject <request_id> --reason "..."
+```
+
+On redemption, the store atomically marks an approved matching record as `used` before calling MISP. Wrong tool, changed payload (`hash_mismatch`), replay (`already_used`), rejected, expired, pending, and unknown approvals return `blocked` and do not call MISP. If MISP later fails or rejects the write, the approval remains consumed; this is intentional replay-safe behavior and retry requires a new operator approval. The LLM/agent must not have shell access to the approval CLI or write access to the approval SQLite database. See `docs/production-write.md` for deployment and permission requirements, including `AGENTIC_MISP_MCP_ALLOWED_ATTRIBUTE_TYPES`, `AGENTIC_MISP_MCP_ALLOWED_ATTRIBUTE_CATEGORIES`, `AGENTIC_MISP_MCP_ALLOWED_TAGS`, and `AGENTIC_MISP_MCP_ENABLE_PUBLISH`.

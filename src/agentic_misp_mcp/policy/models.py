@@ -75,3 +75,64 @@ class ApprovalRequest(BaseModel):
                 "approval proposals must not include secrets or authorization material"
             )
         return value
+
+
+class ApprovalStatus(StrEnum):
+    """Persisted approval lifecycle states and redemption failure details."""
+
+    PENDING = "pending"
+    APPROVED = "approved"
+    USED = "used"
+    REJECTED = "rejected"
+    EXPIRED = "expired"
+    NOT_FOUND = "not_found"
+    WRONG_TOOL = "wrong_tool"
+    HASH_MISMATCH = "hash_mismatch"
+    ALREADY_USED = "already_used"
+    NOT_YET_APPROVED = "not_yet_approved"
+
+
+class StoredApprovalRecord(BaseModel):
+    """Persisted production approval record.
+
+    Stores sanitized proposed arguments for operator review and the exact canonical operation
+    hash for redemption. It intentionally does not store approval tokens, MISP API keys, or
+    caller-provided metadata that is not part of the business operation.
+    """
+
+    model_config = ConfigDict(hide_input_in_errors=True)
+
+    request_id: str
+    tool_name: str
+    operation_hash: str
+    proposed_arguments: dict[str, Any] = Field(default_factory=dict)
+    role: Role
+    status: ApprovalStatus
+    created_at: datetime
+    expires_at: datetime
+    approved_at: datetime | None = None
+    approved_by: str | None = None
+    used_at: datetime | None = None
+    rejected_at: datetime | None = None
+    rejected_reason: str | None = None
+
+    @field_validator("proposed_arguments")
+    @classmethod
+    def stored_arguments_must_not_include_obvious_secrets(
+        cls, value: dict[str, Any]
+    ) -> dict[str, Any]:
+        if contains_secret_key_recursive(value):
+            raise ValueError("stored approval records must not include secrets")
+        return value
+
+
+class ApprovalStoreError(RuntimeError):
+    """Base error for production approval persistence failures."""
+
+
+class ApprovalRedemptionError(ApprovalStoreError):
+    """Raised when approval redemption is blocked."""
+
+    def __init__(self, status: ApprovalStatus, message: str | None = None) -> None:
+        self.status = status
+        super().__init__(message or status.value)

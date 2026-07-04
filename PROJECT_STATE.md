@@ -3,6 +3,13 @@
 Project: agentic-misp-mcp
 
 Current status:
+- Production approval beta complete on `feat/v0.2.0-beta-production-write-approvals`: opt-in
+  `AGENTIC_MISP_MCP_APPROVAL_MODE=production` adds SQLite approval records, CLI-only
+  approve/reject, one-time redemption, exact operation hashes, TTL expiry, replay/payload-swap
+  blocking, publish kill switch, and type/category/tag guardrails for the four existing
+  write-executing tools only. Default lab mode remains backward compatible; `approval_token` is
+  lab/shared-secret hardening only, while production requires an operator-approved
+  `approval_request_id` and consumes it before the MISP write attempt.
 - Phase 1 complete: read-only core MCP
 - Phase 2 complete: agentic IOC investigation engine
 - Phase 3 complete: event intelligence and pivoting
@@ -67,7 +74,15 @@ Current status:
   failure modes, warninglist endpoint compatibility across MISP versions, broader MISP version
   compatibility, and final sign-off.
 
-Current tests: 146 passed.
+- Phase 11 in progress: v0.2.0-beta.1 production-write pilot on branch
+  `feat/v0.2.0-beta-production-write-approvals`. Scope is limited to a production approval layer
+  for the four existing write-executing tools only (`submit_ioc_with_approval`,
+  `add_sighting_with_approval`, `tag_event_with_approval`, `publish_event_with_approval`); no raw
+  proxy, new MISP endpoints, admin MCP tools, or additional write capabilities are in scope.
+  Lab approval mode remains the default unless `AGENTIC_MISP_MCP_APPROVAL_MODE=production` is
+  explicitly configured.
+
+Current tests: 166 passed.
 Current MCP tool count: 19.
 Current license: MIT.
 

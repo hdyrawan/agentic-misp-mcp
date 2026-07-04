@@ -175,3 +175,17 @@ reserved for local development and test environments.
 
 Do not commit `.env` files or API keys. The Docker image does not contain secrets; pass them at
 runtime with environment variables or an env file.
+
+
+## Production approval and write guardrail settings
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `AGENTIC_MISP_MCP_APPROVAL_MODE` | `lab` | `lab` preserves the legacy approval flow; `production` requires persisted approval request redemption. |
+| `AGENTIC_MISP_MCP_APPROVAL_STORE_PATH` | `./approvals.sqlite3` | SQLite approval store for production mode. Parent directory and DB must not be group/world writable. |
+| `AGENTIC_MISP_MCP_APPROVAL_TTL_SECONDS` | `900` | Approval record lifetime in seconds. |
+| `AGENTIC_MISP_MCP_ENABLE_PUBLISH` | `false` | Dedicated publish kill switch; publish also requires curator/admin role and approval. |
+| `AGENTIC_MISP_MCP_ALLOWED_ATTRIBUTE_TYPES` | unset | Optional comma-separated allowlist for `submit_ioc_with_approval` attribute types. |
+| `AGENTIC_MISP_MCP_ALLOWED_TAGS` | unset | Optional comma-separated allowlist for `tag_event_with_approval`; entries ending in `*` act as prefixes. |
+
+See `docs/production-write.md` and `.env.production-write.example` for a complete production-write beta template.

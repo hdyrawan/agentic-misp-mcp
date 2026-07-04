@@ -25,6 +25,12 @@ def test_settings_defaults(monkeypatch, tmp_path):
     assert settings.policy_role == "read_only"
     assert settings.enable_write is False
     assert settings.require_approval is True
+    assert settings.approval_mode == "lab"
+    assert str(settings.approval_store_path) == "approvals.sqlite3"
+    assert settings.approval_ttl_seconds == 900
+    assert settings.enable_publish is False
+    assert settings.allowed_attribute_types == ()
+    assert settings.allowed_tags == ()
 
 
 def test_missing_api_key_fails(monkeypatch):
@@ -77,3 +83,23 @@ def test_validation_error_hides_misp_api_key_input(monkeypatch):
 
     assert secret not in str(exc_info.value)
     assert secret not in repr(exc_info.value.errors(include_url=False))
+
+
+def test_production_approval_and_allowlist_settings(monkeypatch, tmp_path):
+    monkeypatch.setenv("MISP_URL", "https://misp.example.test")
+    monkeypatch.setenv("MISP_API_KEY", "secret")
+    monkeypatch.setenv("AGENTIC_MISP_MCP_APPROVAL_MODE", "production")
+    monkeypatch.setenv("AGENTIC_MISP_MCP_APPROVAL_STORE_PATH", str(tmp_path / "approvals.sqlite3"))
+    monkeypatch.setenv("AGENTIC_MISP_MCP_APPROVAL_TTL_SECONDS", "60")
+    monkeypatch.setenv("AGENTIC_MISP_MCP_ENABLE_PUBLISH", "true")
+    monkeypatch.setenv("AGENTIC_MISP_MCP_ALLOWED_ATTRIBUTE_TYPES", "ip-dst, url")
+    monkeypatch.setenv("AGENTIC_MISP_MCP_ALLOWED_TAGS", "tlp:*, misp-galaxy:foo")
+
+    settings = Settings()
+
+    assert settings.approval_mode == "production"
+    assert settings.approval_store_path == tmp_path / "approvals.sqlite3"
+    assert settings.approval_ttl_seconds == 60
+    assert settings.enable_publish is True
+    assert settings.allowed_attribute_types == ("ip-dst", "url")
+    assert settings.allowed_tags == ("tlp:*", "misp-galaxy:foo")

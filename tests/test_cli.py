@@ -203,3 +203,45 @@ def test_http_bind_to_loopback_allowed(monkeypatch, tmp_path):
     settings = Settings()
 
     validate_http_bind_allowed(settings, "127.0.0.1")
+
+
+def test_approval_cli_list_show_approve_reject(monkeypatch, tmp_path, capsys):
+    _valid_env(monkeypatch, tmp_path)
+    store_path = tmp_path / "approvals.sqlite3"
+    monkeypatch.setenv("AGENTIC_MISP_MCP_APPROVAL_STORE_PATH", str(store_path))
+    from agentic_misp_mcp.policy.approval_store import SqliteApprovalStore
+
+    store = SqliteApprovalStore(store_path)
+    first = store.create(
+        tool_name="submit_ioc_with_approval",
+        operation_hash="hash-1",
+        proposed_arguments={"value": "1.2.3.4"},
+        role="analyst_write",
+        ttl_seconds=900,
+    )
+    second = store.create(
+        tool_name="tag_event_with_approval",
+        operation_hash="hash-2",
+        proposed_arguments={"tag": "tlp:amber"},
+        role="analyst_write",
+        ttl_seconds=900,
+    )
+
+    assert main(["approvals", "list", "--status", "pending"]) == 0
+    output = capsys.readouterr().out
+    assert first.request_id in output
+    assert second.request_id in output
+
+    assert main(["approvals", "show", first.request_id]) == 0
+    output = capsys.readouterr().out
+    assert '"operation_hash": "hash-1"' in output
+
+    assert main(["approvals", "approve", first.request_id, "--approved-by", "alice"]) == 0
+    output = capsys.readouterr().out
+    assert "approved" in output
+    assert SqliteApprovalStore(store_path).get(first.request_id).approved_by == "alice"
+
+    assert main(["approvals", "reject", second.request_id, "--reason", "not safe"]) == 0
+    output = capsys.readouterr().out
+    assert "rejected" in output
+    assert SqliteApprovalStore(store_path).get(second.request_id).rejected_reason == "not safe"

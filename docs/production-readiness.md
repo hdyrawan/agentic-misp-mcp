@@ -54,6 +54,16 @@ already passed in the lab.
 
 ## Controlled-write production requirements
 
+`v0.2.0-beta.1` introduces a narrow production-write pilot for the four existing MISP
+write-executing approval tools only: `submit_ioc_with_approval`, `add_sighting_with_approval`,
+`tag_event_with_approval`, and `publish_event_with_approval`. The beta keeps
+`AGENTIC_MISP_MCP_APPROVAL_MODE=lab` as the default for backward compatibility and requires
+explicit `AGENTIC_MISP_MCP_APPROVAL_MODE=production` to use persisted, one-time-use,
+exact-payload-bound approval request IDs. `propose_event` and `propose_attribute` remain dry-run
+proposal tools and are not part of production approval redemption. See
+[`docs/production-write.md`](production-write.md) for the beta approval-store and operator-CLI
+requirements.
+
 The six controlled write tools (`propose_event`, `propose_attribute`, `submit_ioc_with_approval`,
 `add_sighting_with_approval`, `tag_event_with_approval`, `publish_event_with_approval`) are
 explicitly **out of scope** for the first production target above. Core controlled-write
@@ -63,10 +73,17 @@ sufficient for production use. Before considering controlled writes for any real
 - `propose_event`/`propose_attribute` payload shapes must be validated against a real MISP
   `/events/add` and `/attributes/add/{event_id}` (still pending — these tools never call MISP,
   but their proposed payload shape has not been cross-checked against a live instance).
-- `AGENTIC_MISP_MCP_REQUIRE_APPROVAL=true` must remain enabled, and
-  `AGENTIC_MISP_MCP_APPROVAL_TOKEN` should be configured so that `approved=true` alone cannot be
-  used by an untrusted or autonomous caller to self-approve a write (see
-  [`docs/approval-flow.md`](approval-flow.md)'s human-in-the-loop limitations).
+- Lab approval mode and production approval mode must not be confused. In lab mode,
+  `AGENTIC_MISP_MCP_APPROVAL_TOKEN` is only an optional shared-secret hardening control for the
+  legacy `approved=true` flow. For production-write pilots, set
+  `AGENTIC_MISP_MCP_APPROVAL_MODE=production`: `approved=true` alone never executes writes; a
+  CLI-approved, one-time-use, TTL-bound, exact operation-hash-bound `approval_request_id` is
+  required even if `AGENTIC_MISP_MCP_REQUIRE_APPROVAL=false`.
+- The LLM/agent must not have shell access to `agentic-misp-mcp approvals ...` or write access to
+  `AGENTIC_MISP_MCP_APPROVAL_STORE_PATH`; otherwise it can bypass the human boundary.
+- Configure production guardrails deliberately: `AGENTIC_MISP_MCP_ALLOWED_ATTRIBUTE_TYPES`,
+  `AGENTIC_MISP_MCP_ALLOWED_ATTRIBUTE_CATEGORIES`, `AGENTIC_MISP_MCP_ALLOWED_TAGS`, and the
+  `AGENTIC_MISP_MCP_ENABLE_PUBLISH` publish kill switch.
 - The MISP API key used for controlled writes must belong to a lab-scoped or otherwise
   blast-radius-limited MISP organisation/role — never a key with broad production MISP
   permissions, even once this project's own tool boundary is trusted.
@@ -256,11 +273,13 @@ project boundaries, not temporary gaps:
 - Generic user/organisation/server/settings-style MISP admin tools.
 - Accepting `MISP_API_KEY`, passwords, authorization headers, cookies, or other secrets as normal
   MCP tool arguments. The only token-shaped tool parameter is the existing, redacted
-  `approval_token` mechanism.
+  `approval_token` lab/shared-secret mechanism; production approval uses `approval_request_id`,
+  not a shared token.
 - A built-in audit-log forwarder, SIEM integration, or log-rotation mechanism — see "Audit
   logging and SIEM forwarding guidance" above for what deployers are expected to provide.
-- A persisted approval store, multi-approver workflow, or approval-token expiry — the approval
-  contract remains the simple two-call flow described in `docs/approval-flow.md`.
+- A generic multi-approver workflow or approval-token expiry. Production approval mode deliberately
+  adds only the narrow SQLite `approval_request_id` store described in `docs/production-write.md`;
+  it is not a broader workflow engine.
 - A delete/unpublish/retract tool for controlled writes — undoing a mistaken write is out of
   scope and must be done directly against MISP.
 - Weakening the read-only default, the write-mode kill switch, the approval-required default, or
