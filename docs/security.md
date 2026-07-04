@@ -105,9 +105,12 @@ TLS verification is enabled by default with `MISP_VERIFY_TLS=true`. Disabling TL
 ## Audit logging
 
 Every MCP tool call writes one JSONL audit record, including failures. Audit records include tool
-name, sanitized arguments, policy decision fields, status, duration, and safe error type/message.
-They do not include authorization headers, API keys, approval tokens, authkeys, cookies, passwords,
-or raw backend response bodies.
+name, sanitized arguments, policy decision fields, an `outcome` of `success`, `blocked`, or `error`,
+duration, and safe error type/message. A policy decision with `allowed: false` (for example a write
+attempt while read-only or with writes disabled) is recorded with `success: false` and
+`outcome: "blocked"`, distinct from runtime errors, even though the tool call itself returns
+normally rather than raising. Audit records do not include authorization headers, API keys,
+approval tokens, authkeys, cookies, passwords, or raw backend response bodies.
 
 The audit log path is validated at startup. Its parent directory must already be writable or be
 creatable by the runtime user. Container examples mount `./logs` into `/app/logs` so logs persist

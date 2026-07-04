@@ -10,7 +10,7 @@ It exists because agents should not need unrestricted MISP API access to help wi
 
 - Early development; APIs, outputs, and internals may still change.
 - Mocked test coverage exists for core workflows and policy paths.
-- First live read-only lab validation has passed against MISP 2.5.42 using Docker, stdio transport, and MCP Inspector.
+- First live read-only lab validation has passed against MISP `2.5.42` using Docker, stdio transport, and MCP Inspector.
 - Controlled write validation is still pending and must only be performed against an isolated lab MISP instance.
 - Broader MISP version compatibility testing is still pending.
 - Not production-ready.
@@ -22,23 +22,30 @@ It exists because agents should not need unrestricted MISP API access to help wi
 
 ## Live lab validation status
 
+The first live validation was performed against a controlled, non-production MISP lab.
+
 | Area | Result | Notes |
 | --- | --- | --- |
-| MISP version check | Passed | `/servers/getVersion` returned HTTP 200 against MISP 2.5.42. |
+| MISP version check | Passed | `/servers/getVersion` returned HTTP 200 against MISP `2.5.42`. |
 | Docker runtime | Passed | Image built locally and run with runtime-only environment variables. |
-| config-check | Passed | Configuration validated and API key was redacted. |
+| `config-check` | Passed | Configuration validated, API key was redacted, and audit-log path was writable. |
 | MCP transport | Passed | MCP Inspector connected over stdio to `docker run --rm -i ... --transport stdio`. |
-| `search_ioc` | Passed | Tested with both non-matching and matching IOCs. |
+| `tools/list` | Passed | MCP Inspector listed the exposed MCP tools. |
+| `search_ioc` | Passed | Tested with non-matching, IPv4, domain, composite `domain\|ip`, and SHA256 indicators. |
 | `investigate_ioc` | Passed | Returned verdict, confidence, related event context, warninglist status, and related IOCs. |
 | `summarize_event` | Passed | Summarized a real MISP event without returning unbounded raw event JSON. |
 | `generate_ioc_report` | Passed | Generated a deterministic IOC report from live MISP data. |
-| Audit logging | Passed | Successful calls and validation failures were written to JSONL audit logs. |
+| `check_warninglists` | Passed | Warninglist checks returned structured results when available. |
+| Audit logging | Passed with note | Successful calls, validation failures, and blocked writes were written to JSONL audit logs. Blocked writes currently record `allowed=false`; audit `success` semantics should be tightened in a future fix. |
+| Read-only write blocking | Passed | A write attempt with `approved=true` was blocked in `read_only` mode while write mode was disabled; follow-up search confirmed MISP was not modified. |
 | Controlled writes | Pending | Must be validated separately with `AGENTIC_MISP_MCP_ENABLE_WRITE=true` against an isolated lab only. |
 | Production deployment | Not validated | This project remains lab-tested, not production-certified. |
 
-The first positive live IOC test used `54.87.87.13`, which matched MISP event 187, "OSINT - NANHAISHU RATing the South China Sea". The generated IOC report classified the IOC as suspicious with medium confidence based on live MISP matches, actionable `to_ids` attributes, related event context, and extracted related IOCs.
+The first positive live IOC test used `54.87.87.13`, which matched MISP event `187`, `OSINT - NANHAISHU RATing the South China Sea`. The generated IOC report classified the IOC as `suspicious` with medium confidence based on live MISP matches, actionable `to_ids` attributes, related event context, and extracted related IOCs.
 
-Because the first positive live test used historical OSINT data, analyst workflows should correlate hits with recent SIEM, EDR, DNS, proxy, or firewall telemetry before blocking or escalation.
+Additional read-only validation confirmed that domain-side searches for composite `domain|ip` attributes work, including `mines.port0.org` and `eholidays.mooo.com`. SHA256 lookup was also validated using a related payload-delivery hash from the same event.
+
+Because the first positive live test used historical OSINT data, analyst workflows should correlate hits with recent SIEM, EDR, DNS, proxy, firewall, or endpoint telemetry before blocking or escalation.
 
 ## Safety model
 
@@ -148,7 +155,7 @@ agentic-misp-mcp --transport stdio
 
 ### Docker usage
 
-This flow was used for the first live read-only lab validation against MISP 2.5.42. It uses
+This flow was used for the first live read-only lab validation against MISP `2.5.42`. It uses
 generic paths — replace them with your own locations outside the repository.
 
 #### Build image
@@ -163,13 +170,25 @@ docker build -t agentic-misp-mcp:live-test .
 ```bash
 mkdir -p /home/user/.config/agentic-misp-mcp
 cat > /home/user/.config/agentic-misp-mcp/live.env <<'EOF'
-MISP_URL=https://misp.lab.example
+# Example lab environment
+MISP_URL=https://misp-lab.example.local
 MISP_API_KEY=replace_with_your_lab_api_key
 MISP_VERIFY_TLS=false
+
+MISP_TIMEOUT_SECONDS=30
+MISP_DEFAULT_LIMIT=20
+MISP_MAX_LIMIT=100
+MISP_EVENT_ATTRIBUTE_LIMIT=50
+MISP_RELATED_EVENT_LIMIT=5
+
+AGENTIC_MISP_MCP_AUDIT_LOG_PATH=/app/logs/audit.jsonl
+AGENTIC_MISP_MCP_LOG_LEVEL=INFO
 AGENTIC_MISP_MCP_ROLE=read_only
 AGENTIC_MISP_MCP_ENABLE_WRITE=false
 AGENTIC_MISP_MCP_REQUIRE_APPROVAL=true
-AGENTIC_MISP_MCP_AUDIT_LOG_PATH=/app/logs/audit.jsonl
+AGENTIC_MISP_MCP_APPROVAL_TOKEN=
+AGENTIC_MISP_MCP_MAX_RESPONSE_BYTES=5242880
+AGENTIC_MISP_MCP_ALLOW_INSECURE_HTTP_BIND=false
 EOF
 ```
 
@@ -230,7 +249,7 @@ MCP Inspector serves its client UI and proxy on ports 6274 and 6277. When Inspec
 headless Linux host, forward both ports over SSH and open the UI from your workstation browser:
 
 ```bash
-ssh -L 6274:localhost:6274 -L 6277:localhost:6277 user@headless-host
+ssh -L 6274:localhost:6274 -L 6277:localhost:6277 user@mcp-host.example.local
 ```
 
 Then browse to `http://localhost:6274` on the workstation.
