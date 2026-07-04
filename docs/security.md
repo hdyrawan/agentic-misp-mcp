@@ -31,6 +31,9 @@ All tools must be registered through `tools/registry.py` and audited through the
 
 `MISP_API_KEY` must come from the environment. It is injected into HTTP headers by the MISP client and must never be accepted as a tool argument, logged, or returned in errors.
 
+Use `agentic-misp-mcp config-check` to validate that `MISP_API_KEY` is present. The command
+redacts the key and does not connect to MISP.
+
 ## TLS
 
 TLS verification is enabled by default with `MISP_VERIFY_TLS=true`. Disabling TLS verification is unsafe for production.
@@ -38,6 +41,19 @@ TLS verification is enabled by default with `MISP_VERIFY_TLS=true`. Disabling TL
 ## Audit logging
 
 Every MCP tool call writes one JSONL audit record, including failures. Audit records include tool name, sanitized arguments, status, duration, and error type/message. They do not include authorization headers or API keys.
+
+The audit log path is validated at startup. Its parent directory must already be writable or be
+creatable by the runtime user. Container examples mount `./logs` into `/app/logs` so logs persist
+without baking secrets or runtime state into the image.
+
+## Runtime and deployment safety
+
+- Run `agentic-misp-mcp config-check` before starting the server.
+- Keep `.env` files out of git and pass them only at runtime.
+- The Docker image runs as a non-root user.
+- The Docker image exposes port `8000` only for optional experimental HTTP mode; stdio remains the
+  primary supported transport.
+- Do not bake `MISP_URL` or `MISP_API_KEY` into Dockerfiles, images, or committed config.
 
 ## Output limits
 

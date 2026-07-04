@@ -71,10 +71,15 @@ Safe defaults:
 
 ```bash
 agentic-misp-mcp --help
+agentic-misp-mcp --version
+agentic-misp-mcp config-check
 agentic-misp-mcp --transport stdio
+agentic-misp-mcp --transport http --host 0.0.0.0 --port 8000
 ```
 
-`--transport http` is accepted as a v0.1 placeholder when supported by the installed FastMCP runtime, but stdio is the primary supported v0.1 transport.
+`config-check` validates environment configuration without connecting to MISP and never prints
+`MISP_API_KEY`. `--transport http` is experimental and depends on the installed FastMCP runtime;
+stdio is the primary supported transport.
 
 ## Development
 
@@ -89,7 +94,18 @@ pytest
 
 ```bash
 docker build -t agentic-misp-mcp:local .
+docker run --rm --env-file .env -v "$PWD/logs:/app/logs" agentic-misp-mcp:local config-check
 docker run --rm --env-file .env agentic-misp-mcp:local --transport stdio
 ```
 
-Do not bake MISP credentials into the image.
+Docker Compose example:
+
+```bash
+cp .env.example .env
+# edit .env with MISP_URL=https://misp.example.local and MISP_API_KEY=your_misp_api_key_here
+docker compose -f docker-compose.example.yml run --rm agentic-misp-mcp config-check
+docker compose -f docker-compose.example.yml run --rm agentic-misp-mcp
+```
+
+Do not bake MISP credentials into the image. Use `.env` only as a runtime env file and do not
+commit it.

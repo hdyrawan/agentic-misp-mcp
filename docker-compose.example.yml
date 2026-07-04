@@ -2,7 +2,27 @@ services:
   agentic-misp-mcp:
     build: .
     image: agentic-misp-mcp:local
-    env_file: .env
+    # Keep secrets out of the image. Put runtime values in .env and do not commit it.
+    # Required .env values:
+    #   MISP_URL=https://misp.example.local
+    #   MISP_API_KEY=your_misp_api_key_here
+    # Recommended defaults are shown in .env.example.
+    env_file:
+      - .env
     volumes:
+      # Persist JSONL audit logs on the host.
       - ./logs:/app/logs
     command: ["--transport", "stdio"]
+
+  # Optional experimental HTTP mode. Uncomment only if your MCP client and installed
+  # FastMCP runtime support HTTP transport cleanly.
+  # agentic-misp-mcp-http:
+  #   build: .
+  #   image: agentic-misp-mcp:local
+  #   env_file:
+  #     - .env
+  #   volumes:
+  #     - ./logs:/app/logs
+  #   ports:
+  #     - "8000:8000"
+  #   command: ["--transport", "http", "--host", "0.0.0.0", "--port", "8000"]
