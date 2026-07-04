@@ -7,6 +7,35 @@ live MISP compatibility testing is still pending.
 
 ## Unreleased
 
+### Phase 9 - Production hardening
+
+### Added
+
+- Added GitHub Actions CI for Python 3.11 and 3.12 running Ruff lint, Ruff format check, and the
+  mocked pytest suite through `uv run --extra dev`.
+- Added a `Makefile` with `lint`, `format-check`, `test`, and `check` targets.
+- Added top-level `SECURITY.md` with early-development status, vulnerability reporting guidance,
+  supported-version status, and secret-handling expectations.
+- Added production-hardening tests for tool-boundary invariants, secret-safe CLI output, and safe
+  policy defaults.
+
+### Changed
+
+- Documented CI, development commands, Docker secret handling, HTTP transport warnings, and Phase 8
+  policy runtime guidance.
+- Confirmed packaging metadata, Python 3.11+ requirement, Apache-2.0 license metadata, CLI script,
+  runtime dependencies, and dev optional dependencies without risky dependency changes.
+- Tightened `.dockerignore` hygiene while keeping Docker runtime behavior unchanged: credentials
+  are still runtime-only, and the image continues to run as a non-root user.
+
+### Security
+
+- Reaffirmed the 19-tool MCP boundary: no raw API proxy, shell/filesystem tool, generic admin tool,
+  or secret/token/password parameter is exposed.
+- Reaffirmed safe policy defaults: write mode disabled, read-only role, and approval required.
+
+### Phase 8 - Controlled write workflows
+
 ### Added
 
 - Added read-only MCP tools for IOC search, IOC investigation, event summarization, warninglist

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from inspect import signature
 
 import pytest
 
@@ -89,6 +90,51 @@ async def test_no_raw_proxy_or_admin_tools_exist(settings, tmp_path):
     for name in mcp.tools:
         lowered = name.lower()
         assert not any(term in lowered for term in forbidden_substrings), name
+
+
+@pytest.mark.asyncio
+async def test_no_shell_filesystem_or_secret_passthrough_tools(settings, tmp_path):
+    mcp = FakeMCP()
+    audit = AuditLogger(tmp_path / "audit.jsonl")
+    register_tools(mcp, client=FakeClient(), settings=settings, audit_logger=audit)
+
+    forbidden_tool_terms = (
+        "shell",
+        "command",
+        "exec",
+        "filesystem",
+        "file_system",
+        "read_file",
+        "write_file",
+        "path",
+        "upload",
+        "download",
+    )
+    forbidden_parameter_terms = (
+        "api_key",
+        "apikey",
+        "authkey",
+        "auth_key",
+        "authorization",
+        "bearer",
+        "credential",
+        "header",
+        "password",
+        "secret",
+        "token",
+    )
+
+    assert len(mcp.tools) == 19
+    for name, func in mcp.tools.items():
+        lowered_name = name.lower()
+        assert not any(term in lowered_name for term in forbidden_tool_terms), name
+
+        for parameter_name in signature(func).parameters:
+            lowered_parameter = parameter_name.lower()
+            assert not any(term in lowered_parameter for term in forbidden_parameter_terms), (
+                name,
+                parameter_name,
+            )
 
 
 @pytest.mark.asyncio

@@ -12,6 +12,7 @@ default — proposing and submitting controlled writes. It is **not** a raw MISP
 - Write tools exist but are disabled by default (`AGENTIC_MISP_MCP_ENABLE_WRITE=false`) and are
   policy/approval-gated when enabled. No generic admin tools or raw API proxy are implemented.
 - Not yet recommended for production use.
+- CI runs lint, format checks, and the mocked test suite on Python 3.11 and 3.12.
 
 ## Scope
 
@@ -108,11 +109,22 @@ does not expose any MISP API endpoint as an MCP tool or call MISP; see
 ## Development
 
 ```bash
-python -m pip install -e ".[dev]"
-ruff check .
-ruff format --check .
-pytest
+uv run --extra dev ruff check .
+uv run --extra dev ruff format --check .
+uv run --extra dev pytest -q
 ```
+
+Equivalent Makefile targets are available:
+
+```bash
+make lint
+make format-check
+make test
+make check
+```
+
+The test suite uses mocked MISP responses only. Do not point tests at a live MISP instance, and
+do not add tests that require live credentials or network access to MISP.
 
 ## Docker
 
@@ -132,4 +144,18 @@ docker compose -f docker-compose.example.yml run --rm agentic-misp-mcp
 ```
 
 Do not bake MISP credentials into the image. Use `.env` only as a runtime env file and do not
-commit it.
+commit it. The Dockerfile installs the package into the image and runs the CLI as a non-root
+runtime user; pass `MISP_URL` and `MISP_API_KEY` only at container run time.
+
+## CI
+
+GitHub Actions configuration lives in `.github/workflows/ci.yml` and runs the same quality gate
+expected before merging changes:
+
+```bash
+uv run --extra dev ruff check .
+uv run --extra dev ruff format --check .
+uv run --extra dev pytest -q
+```
+
+CI does not connect to MISP and must not be configured with real MISP credentials.
