@@ -46,8 +46,7 @@ def check_configuration() -> ConfigCheckResult:
         f"OK AGENTIC_MISP_MCP_ENABLE_PUBLISH={str(settings.enable_publish).lower()}",
         "OK AGENTIC_MISP_MCP_ALLOWED_ATTRIBUTE_TYPES="
         f"{','.join(settings.allowed_attribute_types) or 'not set'}",
-        "OK AGENTIC_MISP_MCP_ALLOWED_TAGS="
-        f"{','.join(settings.allowed_tags) or 'not set'}",
+        f"OK AGENTIC_MISP_MCP_ALLOWED_TAGS={','.join(settings.allowed_tags) or 'not set'}",
         "OK AGENTIC_MISP_MCP_APPROVAL_TOKEN="
         f"{'set ([REDACTED])' if settings.approval_token else 'not set'}",
         f"OK AGENTIC_MISP_MCP_MAX_RESPONSE_BYTES={settings.max_response_bytes}",
@@ -143,7 +142,9 @@ FIELD_TO_ENV = {
     "allowed_attribute_types": "AGENTIC_MISP_MCP_ALLOWED_ATTRIBUTE_TYPES",
     "AGENTIC_MISP_MCP_ALLOWED_ATTRIBUTE_TYPES": "AGENTIC_MISP_MCP_ALLOWED_ATTRIBUTE_TYPES",
     "allowed_attribute_categories": "AGENTIC_MISP_MCP_ALLOWED_ATTRIBUTE_CATEGORIES",
-    "AGENTIC_MISP_MCP_ALLOWED_ATTRIBUTE_CATEGORIES": "AGENTIC_MISP_MCP_ALLOWED_ATTRIBUTE_CATEGORIES",
+    "AGENTIC_MISP_MCP_ALLOWED_ATTRIBUTE_CATEGORIES": (
+        "AGENTIC_MISP_MCP_ALLOWED_ATTRIBUTE_CATEGORIES"
+    ),
     "allowed_tags": "AGENTIC_MISP_MCP_ALLOWED_TAGS",
     "AGENTIC_MISP_MCP_ALLOWED_TAGS": "AGENTIC_MISP_MCP_ALLOWED_TAGS",
     "max_response_bytes": "AGENTIC_MISP_MCP_MAX_RESPONSE_BYTES",

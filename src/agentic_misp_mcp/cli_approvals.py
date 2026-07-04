@@ -12,7 +12,9 @@ from agentic_misp_mcp.policy.models import ApprovalStatus, ApprovalStoreError, S
 from agentic_misp_mcp.settings import Settings
 
 
-def add_approvals_subparser(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
+def add_approvals_subparser(
+    subparsers: argparse._SubParsersAction[argparse.ArgumentParser],
+) -> None:
     approvals = subparsers.add_parser(
         "approvals",
         help="Administer production approval requests from the operator CLI.",
@@ -33,7 +35,9 @@ def add_approvals_subparser(subparsers: argparse._SubParsersAction[argparse.Argu
     approve_parser.add_argument("request_id")
     approve_parser.add_argument("--approved-by", default=None)
 
-    reject_parser = approval_commands.add_parser("reject", help="Reject a pending or approved request.")
+    reject_parser = approval_commands.add_parser(
+        "reject", help="Reject a pending or approved request."
+    )
     reject_parser.add_argument("request_id")
     reject_parser.add_argument("--reason", required=True)
 
@@ -61,7 +65,9 @@ def handle_approvals_command(args: argparse.Namespace) -> int:
             if record is None:
                 sys.stderr.write("Approval request not found\n")
                 return 1
-            sys.stdout.write(json.dumps(record.model_dump(mode="json"), indent=2, sort_keys=True) + "\n")
+            sys.stdout.write(
+                json.dumps(record.model_dump(mode="json"), indent=2, sort_keys=True) + "\n"
+            )
             return 0
         if args.approvals_command == "approve":
             record = store.approve(args.request_id, approved_by=args.approved_by)

@@ -417,9 +417,7 @@ def register_tools(
                 approval_request_id=approval_request_id,
                 approval_store=approval_store,
                 approval_ttl_seconds=settings.approval_ttl_seconds,
-                guardrail=enforce_tag_guardrails(
-                    tag=tag, allowed_tags=settings.allowed_tags
-                ),
+                guardrail=enforce_tag_guardrails(tag=tag, allowed_tags=settings.allowed_tags),
             ),
         )
 

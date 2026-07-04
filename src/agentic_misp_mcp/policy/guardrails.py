@@ -19,17 +19,13 @@ def enforce_attribute_guardrails(
     if allowed_types and attribute_type not in allowed_types:
         return GuardrailResult(
             allowed=False,
-            reason=(
-                "attribute type is not allowed by "
-                "AGENTIC_MISP_MCP_ALLOWED_ATTRIBUTE_TYPES"
-            ),
+            reason=("attribute type is not allowed by AGENTIC_MISP_MCP_ALLOWED_ATTRIBUTE_TYPES"),
         )
     if allowed_categories and category is not None and category not in allowed_categories:
         return GuardrailResult(
             allowed=False,
             reason=(
-                "attribute category is not allowed by "
-                "AGENTIC_MISP_MCP_ALLOWED_ATTRIBUTE_CATEGORIES"
+                "attribute category is not allowed by AGENTIC_MISP_MCP_ALLOWED_ATTRIBUTE_CATEGORIES"
             ),
         )
     return GuardrailResult(allowed=True)

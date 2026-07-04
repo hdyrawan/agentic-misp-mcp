@@ -177,3 +177,40 @@ async def test_audit_failure_truncates_long_error_message(tmp_path):
     record = json.loads(path.read_text().strip())
     assert len(record["error_message"]) <= 530
     assert "[truncated]" in record["error_message"]
+
+
+@pytest.mark.asyncio
+async def test_audit_adds_approval_fields_without_new_outcomes_or_secret_leak(tmp_path):
+    path = tmp_path / "audit.jsonl"
+    logger = AuditLogger(path)
+    policy_decision = {
+        "role": "analyst_write",
+        "action": "write",
+        "allowed": True,
+        "approval_required": True,
+    }
+
+    async def blocked_by_approval():
+        return {
+            "status": "blocked",
+            "approval_request_id": "request-1",
+            "operation_hash": "hash-1",
+            "approval_status": "hash_mismatch",
+        }
+
+    await audit_call(
+        logger,
+        "submit_ioc_with_approval",
+        {"approval_token": "super-secret-token"},
+        blocked_by_approval,
+        policy_decision=policy_decision,
+    )
+
+    text = path.read_text()
+    assert "super-secret-token" not in text
+    record = json.loads(text.strip())
+    assert record["outcome"] == "blocked"
+    assert record["approval_request_id"] == "request-1"
+    assert record["operation_hash"] == "hash-1"
+    assert record["approval_status"] == "hash_mismatch"
+    assert record["arguments"]["approval_token"] == "[REDACTED]"

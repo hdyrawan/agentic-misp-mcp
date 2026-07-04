@@ -280,6 +280,7 @@ async def test_curator_and_admin_can_publish_only_with_approval(monkeypatch, tmp
             AGENTIC_MISP_MCP_ROLE=role,
             AGENTIC_MISP_MCP_ENABLE_WRITE="true",
             AGENTIC_MISP_MCP_REQUIRE_APPROVAL="true",
+            AGENTIC_MISP_MCP_ENABLE_PUBLISH="true",
         )
 
         pending = await mcp.tools["publish_event_with_approval"](1)
@@ -355,6 +356,7 @@ async def test_publish_event_reports_failed_when_misp_does_not_publish(monkeypat
         client=client,
         AGENTIC_MISP_MCP_ROLE="curator",
         AGENTIC_MISP_MCP_ENABLE_WRITE="true",
+        AGENTIC_MISP_MCP_ENABLE_PUBLISH="true",
     )
 
     result = await mcp.tools["publish_event_with_approval"](1, approved=True)
@@ -418,3 +420,177 @@ async def test_approval_token_branches_when_configured(monkeypatch, tmp_path):
     assert token not in audit_text
     assert "wrong-token" not in audit_text
     assert '"approval_token": "[REDACTED]"' in audit_text
+
+
+@pytest.mark.asyncio
+async def test_publish_disabled_by_default_even_for_curator(monkeypatch, tmp_path):
+    client = FakeWriteClient()
+    mcp, _, _ = _register(
+        monkeypatch,
+        tmp_path,
+        client=client,
+        AGENTIC_MISP_MCP_ROLE="curator",
+        AGENTIC_MISP_MCP_ENABLE_WRITE="true",
+    )
+
+    result = await mcp.tools["publish_event_with_approval"](1, approved=True)
+
+    assert result["status"] == "blocked"
+    assert "AGENTIC_MISP_MCP_ENABLE_PUBLISH" in result["policy"]["reason"]
+    assert client.calls == []
+
+
+@pytest.mark.asyncio
+async def test_production_mode_requires_approved_request_id_and_blocks_replay(
+    monkeypatch, tmp_path
+):
+    client = FakeWriteClient()
+    mcp, _, settings = _register(
+        monkeypatch,
+        tmp_path,
+        client=client,
+        AGENTIC_MISP_MCP_ROLE="analyst_write",
+        AGENTIC_MISP_MCP_ENABLE_WRITE="true",
+        AGENTIC_MISP_MCP_APPROVAL_MODE="production",
+        AGENTIC_MISP_MCP_APPROVAL_STORE_PATH=str(tmp_path / "approvals.sqlite3"),
+    )
+
+    blocked = await mcp.tools["submit_ioc_with_approval"](1, "ip-dst", "1.2.3.4", approved=True)
+    assert blocked["status"] == "blocked"
+    assert blocked["approval_status"] == "not_found"
+    assert client.calls == []
+
+    pending = await mcp.tools["submit_ioc_with_approval"](1, "ip-dst", "1.2.3.4")
+    assert pending["status"] == "pending_approval"
+    request_id = pending["approval_request_id"]
+
+    from agentic_misp_mcp.policy.approval_store import SqliteApprovalStore
+
+    store = SqliteApprovalStore(settings.approval_store_path)
+    store.approve(request_id, approved_by="operator")
+
+    changed = await mcp.tools["submit_ioc_with_approval"](
+        1,
+        "ip-dst",
+        "5.6.7.8",
+        approval_request_id=request_id,
+    )
+    assert changed["status"] == "blocked"
+    assert changed["approval_status"] == "hash_mismatch"
+    assert client.calls == []
+
+    executed = await mcp.tools["submit_ioc_with_approval"](
+        1,
+        "ip-dst",
+        "1.2.3.4",
+        approval_request_id=request_id,
+    )
+    assert executed["status"] == "executed"
+    assert executed["approval_status"] == "used"
+    assert client.calls == [("add_attribute", 1, {"type": "ip-dst", "value": "1.2.3.4"})]
+
+    replay = await mcp.tools["submit_ioc_with_approval"](
+        1,
+        "ip-dst",
+        "1.2.3.4",
+        approval_request_id=request_id,
+    )
+    assert replay["status"] == "blocked"
+    assert replay["approval_status"] == "already_used"
+    assert len(client.calls) == 1
+
+    records = [json.loads(line) for line in (tmp_path / "audit.jsonl").read_text().splitlines()]
+    assert records[-1]["outcome"] == "blocked"
+    assert records[-1]["approval_request_id"] == request_id
+    assert records[-1]["approval_status"] == "already_used"
+
+
+@pytest.mark.asyncio
+async def test_production_mode_rejected_and_wrong_tool_requests_do_not_write(monkeypatch, tmp_path):
+    client = FakeWriteClient()
+    mcp, _, settings = _register(
+        monkeypatch,
+        tmp_path,
+        client=client,
+        AGENTIC_MISP_MCP_ROLE="analyst_write",
+        AGENTIC_MISP_MCP_ENABLE_WRITE="true",
+        AGENTIC_MISP_MCP_APPROVAL_MODE="production",
+        AGENTIC_MISP_MCP_APPROVAL_STORE_PATH=str(tmp_path / "approvals.sqlite3"),
+    )
+    from agentic_misp_mcp.policy.approval_store import SqliteApprovalStore
+
+    store = SqliteApprovalStore(settings.approval_store_path)
+    pending = await mcp.tools["tag_event_with_approval"](1, "tlp:amber")
+    store.reject(pending["approval_request_id"], reason="no")
+    rejected = await mcp.tools["tag_event_with_approval"](
+        1, "tlp:amber", approval_request_id=pending["approval_request_id"]
+    )
+    assert rejected["status"] == "blocked"
+    assert rejected["approval_status"] == "rejected"
+
+    pending = await mcp.tools["tag_event_with_approval"](1, "tlp:amber")
+    store.approve(pending["approval_request_id"])
+    wrong_tool = await mcp.tools["add_sighting_with_approval"](
+        value="1.2.3.4", approval_request_id=pending["approval_request_id"]
+    )
+    assert wrong_tool["status"] == "blocked"
+    assert wrong_tool["approval_status"] == "wrong_tool"
+    assert client.calls == []
+
+
+@pytest.mark.asyncio
+async def test_allowlists_block_before_approval_record_creation(monkeypatch, tmp_path):
+    client = FakeWriteClient()
+    mcp, _, settings = _register(
+        monkeypatch,
+        tmp_path,
+        client=client,
+        AGENTIC_MISP_MCP_ROLE="analyst_write",
+        AGENTIC_MISP_MCP_ENABLE_WRITE="true",
+        AGENTIC_MISP_MCP_APPROVAL_MODE="production",
+        AGENTIC_MISP_MCP_APPROVAL_STORE_PATH=str(tmp_path / "approvals.sqlite3"),
+        AGENTIC_MISP_MCP_ALLOWED_ATTRIBUTE_TYPES="ip-dst",
+        AGENTIC_MISP_MCP_ALLOWED_TAGS="tlp:*",
+    )
+
+    bad_type = await mcp.tools["submit_ioc_with_approval"](1, "url", "http://example.test")
+    assert bad_type["status"] == "blocked"
+
+    bad_tag = await mcp.tools["tag_event_with_approval"](1, "private:tag")
+    assert bad_tag["status"] == "blocked"
+
+    from agentic_misp_mcp.policy.approval_store import SqliteApprovalStore
+
+    assert SqliteApprovalStore(settings.approval_store_path).list() == []
+    assert client.calls == []
+
+
+@pytest.mark.asyncio
+async def test_production_expired_approval_cannot_execute(monkeypatch, tmp_path):
+    client = FakeWriteClient()
+    mcp, _, settings = _register(
+        monkeypatch,
+        tmp_path,
+        client=client,
+        AGENTIC_MISP_MCP_ROLE="analyst_write",
+        AGENTIC_MISP_MCP_ENABLE_WRITE="true",
+        AGENTIC_MISP_MCP_APPROVAL_MODE="production",
+        AGENTIC_MISP_MCP_APPROVAL_STORE_PATH=str(tmp_path / "approvals.sqlite3"),
+        AGENTIC_MISP_MCP_APPROVAL_TTL_SECONDS="1",
+    )
+    from datetime import datetime, timedelta, timezone
+
+    from agentic_misp_mcp.policy.approval_store import SqliteApprovalStore
+
+    pending = await mcp.tools["add_sighting_with_approval"](value="1.2.3.4")
+    store = SqliteApprovalStore(settings.approval_store_path)
+    store.approve(pending["approval_request_id"])
+    store.expire_stale(now=datetime.now(timezone.utc) + timedelta(seconds=2))  # noqa: UP017
+
+    result = await mcp.tools["add_sighting_with_approval"](
+        value="1.2.3.4", approval_request_id=pending["approval_request_id"]
+    )
+
+    assert result["status"] == "blocked"
+    assert result["approval_status"] == "expired"
+    assert client.calls == []

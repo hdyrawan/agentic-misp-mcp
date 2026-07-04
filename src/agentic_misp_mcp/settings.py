@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Literal
+from typing import Annotated, Literal
 
 from pydantic import AnyHttpUrl, Field, field_validator, model_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 
 class Settings(BaseSettings):
@@ -55,16 +55,14 @@ class Settings(BaseSettings):
     approval_ttl_seconds: int = Field(
         default=900, validation_alias="AGENTIC_MISP_MCP_APPROVAL_TTL_SECONDS", ge=1
     )
-    enable_publish: bool = Field(
-        default=False, validation_alias="AGENTIC_MISP_MCP_ENABLE_PUBLISH"
-    )
-    allowed_attribute_types: tuple[str, ...] = Field(
+    enable_publish: bool = Field(default=False, validation_alias="AGENTIC_MISP_MCP_ENABLE_PUBLISH")
+    allowed_attribute_types: Annotated[tuple[str, ...], NoDecode] = Field(
         default=(), validation_alias="AGENTIC_MISP_MCP_ALLOWED_ATTRIBUTE_TYPES"
     )
-    allowed_attribute_categories: tuple[str, ...] = Field(
+    allowed_attribute_categories: Annotated[tuple[str, ...], NoDecode] = Field(
         default=(), validation_alias="AGENTIC_MISP_MCP_ALLOWED_ATTRIBUTE_CATEGORIES"
     )
-    allowed_tags: tuple[str, ...] = Field(
+    allowed_tags: Annotated[tuple[str, ...], NoDecode] = Field(
         default=(), validation_alias="AGENTIC_MISP_MCP_ALLOWED_TAGS"
     )
     max_response_bytes: int = Field(

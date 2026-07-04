@@ -4,7 +4,7 @@ import json
 import os
 import sqlite3
 import stat
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Protocol
 from uuid import uuid4
@@ -40,7 +40,9 @@ class ApprovalStore(Protocol):
 
     def list(self, status: ApprovalStatus | str | None = None) -> list[StoredApprovalRecord]: ...
 
-    def approve(self, request_id: str, *, approved_by: str | None = None) -> StoredApprovalRecord: ...
+    def approve(
+        self, request_id: str, *, approved_by: str | None = None
+    ) -> StoredApprovalRecord: ...
 
     def reject(self, request_id: str, *, reason: str) -> StoredApprovalRecord: ...
 
@@ -136,8 +138,13 @@ class InMemoryApprovalStore:
         now = now or datetime.now(timezone.utc)  # noqa: UP017
         count = 0
         for request_id, record in list(self.records.items()):
-            if record.status in {ApprovalStatus.PENDING, ApprovalStatus.APPROVED} and record.expires_at <= now:
-                self.records[request_id] = record.model_copy(update={"status": ApprovalStatus.EXPIRED})
+            if (
+                record.status in {ApprovalStatus.PENDING, ApprovalStatus.APPROVED}
+                and record.expires_at <= now
+            ):
+                self.records[request_id] = record.model_copy(
+                    update={"status": ApprovalStatus.EXPIRED}
+                )
                 count += 1
         return count
 
@@ -162,7 +169,9 @@ class InMemoryApprovalStore:
         record = self.get(request_id)
         if record is None:
             raise ApprovalRedemptionError(ApprovalStatus.NOT_FOUND)
-        status = _redemption_failure_status(record, tool_name=tool_name, operation_hash=operation_hash)
+        status = _redemption_failure_status(
+            record, tool_name=tool_name, operation_hash=operation_hash
+        )
         if status is not None:
             raise ApprovalRedemptionError(status)
         return record
@@ -365,9 +374,7 @@ class SqliteApprovalStore:
                 )
                 """
             )
-            conn.execute(
-                "CREATE INDEX IF NOT EXISTS idx_approvals_status ON approvals(status)"
-            )
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_approvals_status ON approvals(status)")
         os.chmod(self.path, 0o600)
         _enforce_safe_store_path(self.path)
 
@@ -442,7 +449,7 @@ def _redemption_failure_status(
 def _format_dt(value: datetime | None) -> str | None:
     if value is None:
         return None
-    return value.astimezone(timezone.utc).isoformat()
+    return value.astimezone(UTC).isoformat()
 
 
 def _parse_dt(value: str) -> datetime:

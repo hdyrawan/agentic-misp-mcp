@@ -6,8 +6,8 @@ import sys
 from pydantic import ValidationError
 
 from agentic_misp_mcp import __version__
-from agentic_misp_mcp.config_check import check_configuration, format_validation_error_lines
 from agentic_misp_mcp.cli_approvals import add_approvals_subparser, handle_approvals_command
+from agentic_misp_mcp.config_check import check_configuration, format_validation_error_lines
 from agentic_misp_mcp.openapi import generate_markdown_inventory_file
 from agentic_misp_mcp.server import StartupConfigurationError, run_server
 

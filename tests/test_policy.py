@@ -62,7 +62,7 @@ def test_admin_requires_approval_for_admin_actions():
 
 @pytest.mark.parametrize("role", [Role.CURATOR, Role.ADMIN])
 def test_curator_and_admin_require_approval_for_publish_actions(role: Role):
-    engine = PolicyEngine(role=role, enable_write=True, require_approval=True)
+    engine = PolicyEngine(role=role, enable_write=True, require_approval=True, enable_publish=True)
 
     decision = engine.decide(tool_name="publish_event_with_approval", action=Action.PUBLISH)
 
@@ -156,3 +156,13 @@ def test_approval_request_allows_safe_nested_payload():
     )
 
     assert request.proposed_arguments["payload"]["value"] == "1.2.3.4"
+
+
+def test_publish_disabled_by_default_even_for_curator():
+    engine = PolicyEngine(role=Role.CURATOR, enable_write=True, require_approval=True)
+
+    decision = engine.decide(tool_name="publish_event_with_approval", action=Action.PUBLISH)
+
+    assert decision.allowed is False
+    assert decision.approval_required is False
+    assert "AGENTIC_MISP_MCP_ENABLE_PUBLISH" in decision.reason

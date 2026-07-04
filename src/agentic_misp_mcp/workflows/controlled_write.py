@@ -188,7 +188,11 @@ def _failed_result(
 
 
 def _add_approval_fields(
-    result: dict[str, Any], *, approval_request_id: str | None, operation_hash_value: str | None, approval_status: str | None
+    result: dict[str, Any],
+    *,
+    approval_request_id: str | None,
+    operation_hash_value: str | None,
+    approval_status: str | None,
 ) -> None:
     if approval_request_id is not None:
         result["approval_request_id"] = approval_request_id
@@ -201,7 +205,9 @@ def _add_approval_fields(
 def _guardrail_blocked_result(
     tool_name: str, decision: PolicyDecision, guardrail: GuardrailResult
 ) -> dict[str, Any]:
-    return _blocked_result(tool_name, decision, reason=guardrail.reason or "write guardrail blocked")
+    return _blocked_result(
+        tool_name, decision, reason=guardrail.reason or "write guardrail blocked"
+    )
 
 
 def _production_approval_check(
@@ -347,7 +353,9 @@ async def submit_ioc_with_approval_workflow(
     else:
         redeemed_request_id = op_hash = None
         if decision.approval_required and not approved:
-            return _pending_approval_result(tool_name, decision, proposed_arguments=proposed_arguments)
+            return _pending_approval_result(
+                tool_name, decision, proposed_arguments=proposed_arguments
+            )
         if decision.approval_required and not _approval_token_allows_execution(
             expected_approval_token=expected_approval_token, approval_token=approval_token
         ):
@@ -461,7 +469,9 @@ async def tag_event_with_approval_workflow(
     else:
         redeemed_request_id = op_hash = None
         if decision.approval_required and not approved:
-            return _pending_approval_result(tool_name, decision, proposed_arguments=proposed_arguments)
+            return _pending_approval_result(
+                tool_name, decision, proposed_arguments=proposed_arguments
+            )
         if decision.approval_required and not _approval_token_allows_execution(
             expected_approval_token=expected_approval_token, approval_token=approval_token
         ):
@@ -519,7 +529,9 @@ async def publish_event_with_approval_workflow(
     else:
         redeemed_request_id = op_hash = None
         if decision.approval_required and not approved:
-            return _pending_approval_result(tool_name, decision, proposed_arguments=proposed_arguments)
+            return _pending_approval_result(
+                tool_name, decision, proposed_arguments=proposed_arguments
+            )
         if decision.approval_required and not _approval_token_allows_execution(
             expected_approval_token=expected_approval_token, approval_token=approval_token
         ):
