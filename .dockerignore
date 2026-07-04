@@ -1,4 +1,5 @@
 .git
+.github
 .venv
 .venv*
 __pycache__
@@ -9,8 +10,10 @@ __pycache__
 dist
 build
 logs
+*.log
 .env
 .env.*
 !.env.example
 .coverage
 htmlcov
+.DS_Store

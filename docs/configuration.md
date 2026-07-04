@@ -50,6 +50,17 @@ configured role permits the action. When approval is required (the default), the
 `propose_event`/`propose_attribute` never call MISP regardless of approval. Approval decisions
 are modeled and fully audited; there is no persistent approval storage across process restarts.
 
+Production-oriented runtime guidance:
+
+- Keep `AGENTIC_MISP_MCP_ROLE=read_only` unless a deployment explicitly needs controlled writes.
+- Keep `AGENTIC_MISP_MCP_ENABLE_WRITE=false` for read-only deployments. Setting it to `true`
+  only unlocks the policy engine; role and approval checks still apply.
+- Keep `AGENTIC_MISP_MCP_REQUIRE_APPROVAL=true` for any deployment that enables writes.
+- Do not pass approval arguments automatically from an untrusted agent loop. `approved=true`
+  should represent an explicit operator-approved action.
+- `MISP_API_KEY` must remain environment-only and must not be supplied through MCP tool
+  arguments, CI variables for tests, committed config, or Docker image layers.
+
 ## Validate configuration
 
 ```bash
@@ -78,6 +89,10 @@ agentic-misp-mcp --transport http --host 0.0.0.0 --port 8000
 ```
 
 Use stdio if your MCP client or FastMCP version does not support HTTP mode.
+
+Do not expose HTTP mode directly to untrusted networks. If HTTP mode is required, bind to a
+trusted interface or place it behind an authenticated, TLS-terminating gateway and monitor audit
+logs closely.
 
 ## Docker run
 

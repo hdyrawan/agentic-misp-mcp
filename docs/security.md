@@ -9,6 +9,11 @@ The server ships read-only by default. Phase 8 adds exactly six controlled, poli
 tools (see below); no raw MISP API proxying, generic admin tools, shell execution, or
 unrestricted filesystem access are implemented, and none are planned.
 
+This boundary is part of the MCP security model for the project: tools expose analyst workflows,
+not arbitrary MISP endpoints or host capabilities. Tool registration is centralized in
+`src/agentic_misp_mcp/tools/registry.py`, and each registered tool must go through the shared
+audit wrapper.
+
 ## Policy and approval enforcement
 
 Phase 7 added policy enforcement primitives; Phase 8 wires them into real, gated write
@@ -84,6 +89,10 @@ admin tools exist.
 Use `agentic-misp-mcp config-check` to validate that `MISP_API_KEY` is present. The command
 redacts the key and does not connect to MISP.
 
+MCP tool schemas must not include API key, token, password, authorization header, or other
+credential parameters. Do not use a tool call as a token passthrough mechanism; rotate any real
+secret that is accidentally sent in a prompt, issue, test fixture, audit log, or CI log.
+
 ## TLS
 
 TLS verification is enabled by default with `MISP_VERIFY_TLS=true`. Disabling TLS verification is unsafe for production.
@@ -104,6 +113,8 @@ without baking secrets or runtime state into the image.
 - The Docker image exposes port `8000` only for optional experimental HTTP mode; stdio remains the
   primary supported transport.
 - Do not bake `MISP_URL` or `MISP_API_KEY` into Dockerfiles, images, or committed config.
+- Treat HTTP transport as experimental. If enabled, bind it only on a trusted interface or place it
+  behind an authenticated, TLS-terminating gateway. Do not expose it directly to the internet.
 
 ## Output limits
 

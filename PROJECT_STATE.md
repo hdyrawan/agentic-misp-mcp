@@ -25,8 +25,13 @@ Current status:
   generic write/request proxy. Writes are disabled by default
   (`AGENTIC_MISP_MCP_ENABLE_WRITE=false`), and even when enabled, every write tool call
   resolves to `blocked`, `pending_approval`, or `executed` — never a silent write.
+- Phase 9 complete: production hardening. Added GitHub Actions CI for Python 3.11/3.12,
+  Makefile quality targets, top-level `SECURITY.md`, Docker/.dockerignore hygiene, production
+  hardening tests, and documentation updates for CI, early-development status, HTTP transport
+  warnings, runtime-only secrets, and Phase 8 policy environment variables. Tool behavior and
+  MCP tool count remain unchanged.
 
-Current tests: 123 passed.
+Current tests: 124 passed.
 Current MCP tool count: 19.
 
 Current MCP tools:
@@ -59,5 +64,4 @@ Hard rules:
 - Mocked tests only unless explicitly requested
 
 Next phases:
-- Phase 9 production hardening
 - Phase 10 release
