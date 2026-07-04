@@ -5,6 +5,11 @@ from typing import Any
 from agentic_misp_mcp.audit import AuditLogger, audit_call
 from agentic_misp_mcp.misp.client import MISPClient
 from agentic_misp_mcp.policy import Action, PolicyEngine, enforce_policy
+from agentic_misp_mcp.policy.approval_store import SqliteApprovalStore
+from agentic_misp_mcp.policy.guardrails import (
+    enforce_attribute_guardrails,
+    enforce_tag_guardrails,
+)
 from agentic_misp_mcp.settings import Settings
 from agentic_misp_mcp.workflows.check_warninglists import check_warninglists_workflow
 from agentic_misp_mcp.workflows.controlled_write import (
@@ -75,6 +80,11 @@ def register_tools(
     """Register only approved v0.1-Phase 8 tools through the shared audit wrapper."""
 
     policy_engine = PolicyEngine.from_settings(settings)
+    approval_store = (
+        SqliteApprovalStore(settings.approval_store_path)
+        if settings.approval_mode == "production"
+        else None
+    )
 
     async def _audit_read_tool(
         audit: AuditLogger, tool_name: str, arguments: dict[str, object], call: Any
@@ -289,6 +299,7 @@ def register_tools(
         to_ids: bool | None = None,
         approved: bool = False,
         approval_token: str | None = None,
+        approval_request_id: str | None = None,
     ) -> dict[str, object]:
         """Submit an IOC (attribute) to MISP only when write is enabled, role permits write,
         and approval (when required) has been explicitly given. Otherwise returns a
@@ -305,6 +316,7 @@ def register_tools(
                 "to_ids": to_ids,
                 "approved": approved,
                 "approval_token": approval_token,
+                "approval_request_id": approval_request_id,
             },
             lambda decision: submit_ioc_with_approval_workflow(
                 client,
@@ -318,6 +330,16 @@ def register_tools(
                 approved=approved,
                 approval_token=approval_token,
                 expected_approval_token=settings.approval_token,
+                approval_mode=settings.approval_mode,
+                approval_request_id=approval_request_id,
+                approval_store=approval_store,
+                approval_ttl_seconds=settings.approval_ttl_seconds,
+                guardrail=enforce_attribute_guardrails(
+                    attribute_type=type,
+                    category=category,
+                    allowed_types=settings.allowed_attribute_types,
+                    allowed_categories=settings.allowed_attribute_categories,
+                ),
             ),
         )
 
@@ -329,6 +351,7 @@ def register_tools(
         source: str | None = None,
         approved: bool = False,
         approval_token: str | None = None,
+        approval_request_id: str | None = None,
     ) -> dict[str, object]:
         """Add a sighting to MISP only when policy and approval allow. Otherwise returns a
         blocked/proposal result."""
@@ -343,6 +366,7 @@ def register_tools(
                 "source": source,
                 "approved": approved,
                 "approval_token": approval_token,
+                "approval_request_id": approval_request_id,
             },
             lambda decision: add_sighting_with_approval_workflow(
                 client,
@@ -355,11 +379,19 @@ def register_tools(
                 approved=approved,
                 approval_token=approval_token,
                 expected_approval_token=settings.approval_token,
+                approval_mode=settings.approval_mode,
+                approval_request_id=approval_request_id,
+                approval_store=approval_store,
+                approval_ttl_seconds=settings.approval_ttl_seconds,
             ),
         )
 
     async def tag_event_with_approval(
-        event_id: int, tag: str, approved: bool = False, approval_token: str | None = None
+        event_id: int,
+        tag: str,
+        approved: bool = False,
+        approval_token: str | None = None,
+        approval_request_id: str | None = None,
     ) -> dict[str, object]:
         """Tag a MISP event only when policy and approval allow. Otherwise returns a
         blocked/proposal result."""
@@ -371,6 +403,7 @@ def register_tools(
                 "tag": tag,
                 "approved": approved,
                 "approval_token": approval_token,
+                "approval_request_id": approval_request_id,
             },
             lambda decision: tag_event_with_approval_workflow(
                 client,
@@ -380,11 +413,21 @@ def register_tools(
                 approved=approved,
                 approval_token=approval_token,
                 expected_approval_token=settings.approval_token,
+                approval_mode=settings.approval_mode,
+                approval_request_id=approval_request_id,
+                approval_store=approval_store,
+                approval_ttl_seconds=settings.approval_ttl_seconds,
+                guardrail=enforce_tag_guardrails(
+                    tag=tag, allowed_tags=settings.allowed_tags
+                ),
             ),
         )
 
     async def publish_event_with_approval(
-        event_id: int, approved: bool = False, approval_token: str | None = None
+        event_id: int,
+        approved: bool = False,
+        approval_token: str | None = None,
+        approval_request_id: str | None = None,
     ) -> dict[str, object]:
         """Publish a MISP event only when policy and approval allow. Requires curator/
         admin-like permission and is always high-risk and approval-gated. Otherwise returns
@@ -392,7 +435,12 @@ def register_tools(
         return await _audit_write_tool(
             "publish_event_with_approval",
             Action.PUBLISH,
-            {"event_id": event_id, "approved": approved, "approval_token": approval_token},
+            {
+                "event_id": event_id,
+                "approved": approved,
+                "approval_token": approval_token,
+                "approval_request_id": approval_request_id,
+            },
             lambda decision: publish_event_with_approval_workflow(
                 client,
                 decision,
@@ -400,6 +448,10 @@ def register_tools(
                 approved=approved,
                 approval_token=approval_token,
                 expected_approval_token=settings.approval_token,
+                approval_mode=settings.approval_mode,
+                approval_request_id=approval_request_id,
+                approval_store=approval_store,
+                approval_ttl_seconds=settings.approval_ttl_seconds,
             ),
         )
 
