@@ -89,7 +89,11 @@ def test_doctor_fail_unsafe_approval_store_permissions_in_production(monkeypatch
     _valid_env(monkeypatch, tmp_path)
     monkeypatch.setenv("AGENTIC_MISP_MCP_APPROVAL_MODE", "production")
     unsafe_dir = tmp_path / "unsafe-approvals"
-    unsafe_dir.mkdir(mode=0o777)
+    # mkdir(mode=...) is masked by the process umask (e.g. CI runners default to 0022,
+    # which would silently drop the group/world write bits from a plain mkdir(mode=0o777)).
+    # chmod afterward to get the exact bits under test regardless of umask.
+    unsafe_dir.mkdir()
+    os.chmod(unsafe_dir, 0o777)
     monkeypatch.setenv(
         "AGENTIC_MISP_MCP_APPROVAL_STORE_PATH", str(unsafe_dir / "approvals.sqlite3")
     )
@@ -105,7 +109,8 @@ def test_doctor_fail_unsafe_approval_store_permissions_in_production(monkeypatch
 def test_doctor_skips_approval_store_check_in_lab_mode(monkeypatch, tmp_path):
     _valid_env(monkeypatch, tmp_path)
     unsafe_dir = tmp_path / "unsafe-approvals"
-    unsafe_dir.mkdir(mode=0o777)
+    unsafe_dir.mkdir()
+    os.chmod(unsafe_dir, 0o777)
     monkeypatch.setenv(
         "AGENTIC_MISP_MCP_APPROVAL_STORE_PATH", str(unsafe_dir / "approvals.sqlite3")
     )
