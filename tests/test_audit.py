@@ -50,6 +50,55 @@ async def _fail():
 
 
 @pytest.mark.asyncio
+async def test_audit_blocked_policy_decision_is_not_success(tmp_path):
+    path = tmp_path / "audit.jsonl"
+    logger = AuditLogger(path)
+    policy_decision = {
+        "role": "read_only",
+        "action": "write",
+        "allowed": False,
+        "approval_required": False,
+    }
+
+    result = await audit_call(
+        logger,
+        "submit_ioc_with_approval",
+        {"approval_token": "super-secret-token"},
+        lambda: _ok(),
+        policy_decision=policy_decision,
+    )
+
+    assert result == "ok"
+    record = json.loads(path.read_text().strip())
+    assert record["action"] == "write"
+    assert record["allowed"] is False
+    assert record["role"] == "read_only"
+    assert record["success"] is False
+    assert record["outcome"] == "blocked"
+    assert record["arguments"]["approval_token"] == "[REDACTED]"
+
+
+@pytest.mark.asyncio
+async def test_audit_allowed_policy_decision_still_reports_success(tmp_path):
+    path = tmp_path / "audit.jsonl"
+    logger = AuditLogger(path)
+    policy_decision = {
+        "role": "analyst_write",
+        "action": "write",
+        "allowed": True,
+        "approval_required": False,
+    }
+
+    await audit_call(
+        logger, "submit_ioc_with_approval", {}, lambda: _ok(), policy_decision=policy_decision
+    )
+
+    record = json.loads(path.read_text().strip())
+    assert record["success"] is True
+    assert record["outcome"] == "success"
+
+
+@pytest.mark.asyncio
 async def test_audit_failure_sanitizes_sensitive_exception_content(tmp_path):
     path = tmp_path / "audit.jsonl"
     logger = AuditLogger(path)

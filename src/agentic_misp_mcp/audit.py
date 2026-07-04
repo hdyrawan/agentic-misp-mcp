@@ -58,6 +58,7 @@ async def audit_call(
             {
                 **base_record,
                 "success": False,
+                "outcome": "error",
                 "duration_ms": duration_ms,
                 "error_type": type(exc).__name__,
                 "error_message": safe_error_message(exc),
@@ -65,10 +66,14 @@ async def audit_call(
         )
         raise
     duration_ms = int((time.perf_counter() - started) * 1000)
+    # A policy decision that disallows the action is a blocked attempt, not a
+    # successful call, even though `call()` returned normally instead of raising.
+    policy_allowed = bool(base_record["policy"]["allowed"]) if policy_decision is not None else True
     await audit_logger.write(
         {
             **base_record,
-            "success": True,
+            "success": policy_allowed,
+            "outcome": "success" if policy_allowed else "blocked",
             "duration_ms": duration_ms,
             "error_type": None,
             "error_message": None,
