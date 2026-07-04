@@ -20,7 +20,7 @@ This validates the repository as a `v0.2.0-beta.1` production-write beta candida
 ## Environment summary
 
 - Deployment shape: local repository execution using `uv run`, direct MCP workflow registration, and direct MISP API setup calls for sandbox event creation/basic API checks.
-- MISP lab: configured via `/home/irawanhd/.config/agentic-misp-mcp/live.env`; secrets were not printed or copied into this report.
+- MISP lab: configured via `<user-config-dir>/agentic-misp-mcp/live.env`; secrets were not printed or copied into this report.
 - TLS: lab config uses `MISP_VERIFY_TLS=false` for normal calls; the explicit TLS fail-closed check forced verification on and failed closed as expected against the lab certificate.
 - Audit paths: isolated under `/tmp/agentic-misp-mcp-live/`, not committed.
 - Approval stores: isolated SQLite files under `/tmp/agentic-misp-mcp-live/`, not committed.
