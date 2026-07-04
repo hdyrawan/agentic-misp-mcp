@@ -3,6 +3,16 @@
 Project: agentic-misp-mcp
 
 Current status:
+- **`v0.2.0` is GA production-ready for the MCP server scope defined in this project** (MCP
+  server behavior, MISP API behavior, approval workflow, audit/redaction, config safety,
+  runtime/deployment docs) — not a SIEM/SOAR/SOC platform, case-management system, or broad
+  enterprise-monitoring claim; SIEM/SOAR/SOC integration remains optional future work, not a GA
+  requirement. Manual audit-log review is the accepted control for this release, not automated
+  SOC-grade alerting/monitoring. `MISP 2.5.42` is the validated GA baseline; other MISP versions
+  should run the validation checklist (`docs/live-validation-plan.md`,
+  `docs/misp-compatibility.md`) before being trusted — none are covered by this GA claim. HTTP
+  429/rate-limit handling has controlled/mocked test coverage only; a live 429 was not performed
+  (no safe way to trigger one in the lab).
 - `main` now contains `v0.2.0-beta.2` (merged via PR #8, commit `6482348`): adds
   `agentic-misp-mcp config doctor` (PASS/WARN/FAIL operational-readiness checks, secrets
   redacted, nonzero exit on `FAIL`), `agentic-misp-mcp approvals prune --older-than <duration>

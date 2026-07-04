@@ -8,6 +8,22 @@ It exists because agents should not need unrestricted MISP API access to help wi
 
 ## Status
 
+**`v0.2.0` is GA production-ready for the MCP server scope defined in this project**
+(MCP server behavior, MISP API behavior, approval workflow, audit/redaction, config safety,
+runtime/deployment docs) — it is not a SIEM/SOAR/SOC platform, case-management system, or a
+broad enterprise-monitoring claim, and SIEM/SOAR/SOC integration remains optional future work,
+not a GA requirement (see
+[`docs/ga-production-readiness-plan.md`](docs/ga-production-readiness-plan.md)). Manual
+audit-log review is the accepted control for this release, not automated SOC-grade
+alerting/monitoring — see [`docs/production-readiness.md`](docs/production-readiness.md)'s
+"Audit logging and manual review guidance." **MISP `2.5.42` is the validated GA baseline**; if
+you run this against a different MISP version, run the validation checklist in
+[`docs/live-validation-plan.md`](docs/live-validation-plan.md) and
+[`docs/misp-compatibility.md`](docs/misp-compatibility.md) first — no other version is covered
+by this GA claim. HTTP `429`/rate-limit handling has controlled/mocked test coverage only; a
+live `429` was not reproduced (no safe way to trigger one in the lab — see
+[`docs/live-validation-report-v0.2.0-rc.1.md`](docs/live-validation-report-v0.2.0-rc.1.md)).
+
 - `main` contains `v0.2.0`, the first GA release. It builds on `v0.2.0-rc.1`
   (`propose_event`/`propose_attribute` payload validation, a MISP version compatibility matrix,
   a fixed dependency-update/Dependabot configuration) plus two fixes found during `v0.2.0-rc.1`'s

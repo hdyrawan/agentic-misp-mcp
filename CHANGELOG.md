@@ -2,20 +2,30 @@
 
 All notable changes to this project will be documented in this file.
 
-This project is in **early development**. It has mocked test coverage plus live-lab validation
-(read-only and controlled-write) against MISP `2.5.42`; broader MISP version compatibility
-testing is still pending.
+This project has mocked test coverage plus live-lab validation (read-only and controlled-write)
+against MISP `2.5.42`; broader MISP version compatibility testing is still pending.
 
 ## v0.2.0 (2026-07-04) — first GA release
 
-`v0.2.0` is a GA release, not full production-readiness certification (see
-`docs/production-readiness.md` for that broader, stricter checklist). GA here means: automated
-tests pass (257), live validation against a real MISP lab found no unresolved critical blockers,
-docs are consistent, secrets/redaction review passes, and known limitations are documented — see
+**`v0.2.0` is GA production-ready for the MCP server scope defined in this project** (MCP server
+behavior, MISP API behavior, approval workflow, audit/redaction, config safety, runtime/
+deployment docs), not full production-readiness certification against
+`docs/production-readiness.md`'s broader, stricter checklist. GA here means: automated tests pass
+(257), live validation against a real MISP lab found no unresolved critical blockers, docs are
+consistent, secrets/redaction review passes, and known limitations are documented — see
 `docs/live-validation-report-v0.2.0-rc.1.md` and `docs/ga-production-readiness-plan.md`. It builds
 on `v0.2.0-rc.1` (tagged and released as a GitHub pre-release) plus two fixes found during that
 release candidate's own live validation pass, detailed below. No new MCP tools, no new MISP write
 capability, no raw proxy/admin behavior were introduced anywhere in this progression.
+
+This is not a SIEM/SOAR/SOC platform, case-management system, or broad enterprise-monitoring
+claim; SIEM/SOAR/SOC integration remains optional future work, not a GA requirement. Manual
+audit-log review is the accepted control for this release, not automated SOC-grade
+alerting/monitoring. `MISP 2.5.42` is the validated GA baseline; other MISP versions should run
+the validation checklist (`docs/live-validation-plan.md`, `docs/misp-compatibility.md`) before
+being trusted — none are covered by this GA claim. HTTP 429/rate-limit handling has
+controlled/mocked test coverage only; a live 429 was not performed (no safe way to trigger one in
+the lab).
 
 ### v0.2.0-rc.1 live validation fixes (2026-07-04)
 
