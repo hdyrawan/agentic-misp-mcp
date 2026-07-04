@@ -77,11 +77,17 @@ async def audit_call(
     result_status = result.get("status") if isinstance(result, Mapping) else None
     tool_reported_failure = result_status == "failed"
     tool_reported_block = result_status == "blocked"
+    # "invalid" means policy allowed the attempt but the proposed payload itself was
+    # malformed (see workflows/controlled_write.py's `_invalid_result`) — MISP was never
+    # contacted. Distinct from both a policy block and a real success.
+    tool_reported_invalid = result_status == "invalid"
     approval_fields = _approval_audit_fields(result) if isinstance(result, Mapping) else {}
     if not policy_allowed or tool_reported_block:
         outcome = "blocked"
     elif tool_reported_failure:
         outcome = "failed"
+    elif tool_reported_invalid:
+        outcome = "invalid"
     else:
         outcome = "success"
     await audit_logger.write(

@@ -13,6 +13,10 @@ from agentic_misp_mcp.policy.approvals import build_approval_request
 from agentic_misp_mcp.policy.guardrails import GuardrailResult
 from agentic_misp_mcp.policy.models import ApprovalRedemptionError, PolicyDecision, Role
 from agentic_misp_mcp.policy.operation_hash import operation_hash
+from agentic_misp_mcp.policy.proposal_validation import (
+    validate_attribute_proposal,
+    validate_event_proposal,
+)
 
 # Static, internal-only metadata used to describe proposals/blocks. Not policy inputs.
 RISK_BY_TOOL: dict[str, str] = {
@@ -202,6 +206,20 @@ def _add_approval_fields(
         result["approval_status"] = approval_status
 
 
+def _invalid_result(tool_name: str, decision: PolicyDecision, errors: list[str]) -> dict[str, Any]:
+    """The proposed payload itself is malformed (missing/invalid fields, unsupported attribute
+    type/category, etc). Distinct from a policy block: policy allowed the attempt, but the
+    payload never becomes a proposal and MISP is never contacted."""
+    return {
+        "tool_name": tool_name,
+        "status": "invalid",
+        "risk": RISK_BY_TOOL[tool_name],
+        "required_role": REQUIRED_ROLE_BY_TOOL[tool_name],
+        "policy": _policy_fields(decision),
+        "validation_errors": errors,
+    }
+
+
 def _guardrail_blocked_result(
     tool_name: str, decision: PolicyDecision, guardrail: GuardrailResult
 ) -> dict[str, Any]:
@@ -276,6 +294,15 @@ async def propose_event_workflow(
     tool_name = "propose_event"
     if not decision.allowed:
         return _blocked_result(tool_name, decision)
+    errors = validate_event_proposal(
+        info=info,
+        distribution=distribution,
+        threat_level_id=threat_level_id,
+        analysis=analysis,
+        tags=tags,
+    )
+    if errors:
+        return _invalid_result(tool_name, decision, errors)
     payload = event_create_payload(
         info=info,
         distribution=distribution,
@@ -300,6 +327,11 @@ async def propose_attribute_workflow(
     tool_name = "propose_attribute"
     if not decision.allowed:
         return _blocked_result(tool_name, decision)
+    errors = validate_attribute_proposal(
+        event_id=event_id, type=type, value=value, category=category, comment=comment, to_ids=to_ids
+    )
+    if errors:
+        return _invalid_result(tool_name, decision, errors)
     payload = attribute_create_payload(
         type=type, value=value, category=category, comment=comment, to_ids=to_ids
     )

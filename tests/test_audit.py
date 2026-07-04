@@ -130,6 +130,42 @@ async def test_audit_tool_reported_failure_is_not_success(tmp_path):
 
 
 @pytest.mark.asyncio
+async def test_audit_tool_reported_invalid_is_not_success(tmp_path):
+    """A proposal tool can return normally with `status: "invalid"` when the proposed
+    payload itself is malformed (see workflows/controlled_write.py's `_invalid_result`).
+    That must not be recorded as `success: true`/`outcome: "success"`, and it is distinct
+    from both `blocked` (policy) and `failed` (MISP rejected the write)."""
+    path = tmp_path / "audit.jsonl"
+    logger = AuditLogger(path)
+    policy_decision = {
+        "role": "analyst_write",
+        "action": "write",
+        "allowed": True,
+        "approval_required": True,
+    }
+
+    async def _tool_invalid():
+        return {
+            "tool_name": "propose_attribute",
+            "status": "invalid",
+            "validation_errors": ["type 'bogus' is not a recognized/supported MISP attribute type"],
+        }
+
+    result = await audit_call(
+        logger,
+        "propose_attribute",
+        {"event_id": 1, "type": "bogus", "value": "1.2.3.4"},
+        _tool_invalid,
+        policy_decision=policy_decision,
+    )
+
+    assert result["status"] == "invalid"
+    record = json.loads(path.read_text().strip())
+    assert record["success"] is False
+    assert record["outcome"] == "invalid"
+
+
+@pytest.mark.asyncio
 async def test_audit_failure_sanitizes_sensitive_exception_content(tmp_path):
     path = tmp_path / "audit.jsonl"
     logger = AuditLogger(path)

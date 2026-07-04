@@ -275,3 +275,98 @@ async def test_publish_event_blocked_for_analyst_write():
     result = await publish_event_with_approval_workflow(client, decision, event_id=1, approved=True)
     assert result["status"] == "blocked"
     assert client.calls == []
+
+
+@pytest.mark.asyncio
+async def test_propose_event_returns_invalid_status_for_blank_info():
+    decision = _decision(
+        tool_name="propose_event",
+        action=Action.WRITE,
+        role=Role.ANALYST_WRITE,
+        allowed=True,
+        approval_required=True,
+    )
+    result = await propose_event_workflow(
+        decision, info="   ", distribution=0, threat_level_id=4, analysis=0, tags=None
+    )
+    assert result["status"] == "invalid"
+    assert any("info" in error for error in result["validation_errors"])
+    assert "proposed_payload" not in result
+
+
+@pytest.mark.asyncio
+async def test_propose_event_returns_invalid_status_for_bad_distribution():
+    decision = _decision(
+        tool_name="propose_event",
+        action=Action.WRITE,
+        role=Role.ANALYST_WRITE,
+        allowed=True,
+        approval_required=True,
+    )
+    result = await propose_event_workflow(
+        decision, info="ok", distribution=99, threat_level_id=4, analysis=0, tags=None
+    )
+    assert result["status"] == "invalid"
+    assert any("distribution" in error for error in result["validation_errors"])
+
+
+@pytest.mark.asyncio
+async def test_propose_event_blocked_takes_precedence_over_invalid_payload():
+    """A read-only/disallowed decision should still short-circuit to `blocked` even when the
+    payload is also malformed - policy is checked before payload validation."""
+    decision = _decision(
+        tool_name="propose_event",
+        action=Action.WRITE,
+        role=Role.READ_ONLY,
+        allowed=False,
+        approval_required=False,
+    )
+    result = await propose_event_workflow(
+        decision, info="   ", distribution=99, threat_level_id=4, analysis=0, tags=None
+    )
+    assert result["status"] == "blocked"
+
+
+@pytest.mark.asyncio
+async def test_propose_attribute_returns_invalid_status_for_unsupported_type():
+    decision = _decision(
+        tool_name="propose_attribute",
+        action=Action.WRITE,
+        role=Role.ANALYST_WRITE,
+        allowed=True,
+        approval_required=True,
+    )
+    result = await propose_attribute_workflow(
+        decision,
+        event_id=7,
+        type="not-a-real-type",
+        value="1.2.3.4",
+        category=None,
+        comment=None,
+        to_ids=None,
+    )
+    assert result["status"] == "invalid"
+    assert any("not a recognized/supported" in error for error in result["validation_errors"])
+    assert "proposed_payload" not in result
+
+
+@pytest.mark.asyncio
+async def test_propose_attribute_returns_invalid_status_for_bad_event_id():
+    decision = _decision(
+        tool_name="propose_attribute",
+        action=Action.WRITE,
+        role=Role.ANALYST_WRITE,
+        allowed=True,
+        approval_required=True,
+    )
+    result = await propose_attribute_workflow(
+        decision,
+        event_id=-1,
+        type="ip-dst",
+        value="1.2.3.4",
+        category=None,
+        comment=None,
+        to_ids=None,
+    )
+    assert result["status"] == "invalid"
+    assert any("event_id" in error for error in result["validation_errors"])

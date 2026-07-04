@@ -618,3 +618,94 @@ async def test_production_expired_approval_cannot_execute(monkeypatch, tmp_path)
     assert result["status"] == "blocked"
     assert result["approval_status"] == "expired"
     assert client.calls == []
+
+
+@pytest.mark.asyncio
+async def test_propose_event_invalid_payload_never_calls_misp_and_audits_as_invalid(
+    monkeypatch, tmp_path
+):
+    client = FakeWriteClient()
+    mcp, _, _ = _register(
+        monkeypatch,
+        tmp_path,
+        client=client,
+        AGENTIC_MISP_MCP_ROLE="analyst_write",
+        AGENTIC_MISP_MCP_ENABLE_WRITE="true",
+    )
+
+    result = await mcp.tools["propose_event"]("   ", distribution=0, threat_level_id=4, analysis=0)
+
+    assert result["status"] == "invalid"
+    assert result["validation_errors"]
+    assert "proposed_payload" not in result
+    assert client.calls == []
+
+    lines = (tmp_path / "audit.jsonl").read_text().strip().splitlines()
+    assert len(lines) == 1
+    record = json.loads(lines[0])
+    assert record["success"] is False
+    assert record["outcome"] == "invalid"
+
+
+@pytest.mark.asyncio
+async def test_propose_attribute_invalid_payload_never_calls_misp_and_audits_as_invalid(
+    monkeypatch, tmp_path
+):
+    client = FakeWriteClient()
+    mcp, _, _ = _register(
+        monkeypatch,
+        tmp_path,
+        client=client,
+        AGENTIC_MISP_MCP_ROLE="analyst_write",
+        AGENTIC_MISP_MCP_ENABLE_WRITE="true",
+    )
+
+    result = await mcp.tools["propose_attribute"](1, "not-a-real-type", "1.2.3.4")
+
+    assert result["status"] == "invalid"
+    assert any("not a recognized/supported" in error for error in result["validation_errors"])
+    assert "proposed_payload" not in result
+    assert client.calls == []
+
+    lines = (tmp_path / "audit.jsonl").read_text().strip().splitlines()
+    assert len(lines) == 1
+    record = json.loads(lines[0])
+    assert record["success"] is False
+    assert record["outcome"] == "invalid"
+
+
+@pytest.mark.asyncio
+async def test_propose_attribute_invalid_event_id_never_calls_misp(monkeypatch, tmp_path):
+    client = FakeWriteClient()
+    mcp, _, _ = _register(
+        monkeypatch,
+        tmp_path,
+        client=client,
+        AGENTIC_MISP_MCP_ROLE="analyst_write",
+        AGENTIC_MISP_MCP_ENABLE_WRITE="true",
+    )
+
+    result = await mcp.tools["propose_attribute"](-1, "ip-dst", "1.2.3.4")
+
+    assert result["status"] == "invalid"
+    assert client.calls == []
+
+
+@pytest.mark.asyncio
+async def test_propose_event_valid_payload_still_returns_proposal(monkeypatch, tmp_path):
+    """Regression guard: valid payloads must still pass through unaffected by the new
+    validation layer."""
+    client = FakeWriteClient()
+    mcp, _, _ = _register(
+        monkeypatch,
+        tmp_path,
+        client=client,
+        AGENTIC_MISP_MCP_ROLE="analyst_write",
+        AGENTIC_MISP_MCP_ENABLE_WRITE="true",
+    )
+
+    result = await mcp.tools["propose_event"]("legit event")
+
+    assert result["status"] == "proposal"
+    assert result["proposed_payload"]["info"] == "legit event"
+    assert client.calls == []
