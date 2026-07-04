@@ -1,7 +1,13 @@
 # Security model
 
-This MIT-licensed project is intentionally workflow-first and in early development. It has not been
-validated against a live MISP instance and should not be treated as production software.
+This MIT-licensed project is intentionally workflow-first and in early development. Live
+read-only validation and core controlled-write validation have both passed against a
+non-production MISP lab (see `README.md`'s "Live lab validation status" table and
+`docs/live-validation-plan.md`). Production deployment itself is **not yet validated**: broader
+MISP version compatibility, edge-case validation (rate limits, timeouts, TLS failure modes, large
+result sets, warninglist endpoint compatibility), and production hardening all remain pending —
+see [`docs/production-readiness.md`](production-readiness.md) for the full scope and checklist.
+Do not treat this project as production software yet.
 
 ## Read-only by default; controlled write behind policy and approval
 
@@ -162,6 +168,14 @@ recommended role, to help plan future controlled-write work. It is a local, offl
 read-only-of-the-spec-file operation: it does not call MISP, does not expose any MISP API
 endpoint as an MCP tool, and does not change the tool boundary above. See
 `docs/openapi-inventory.md` for a generated sample.
+
+## Commit provenance
+
+Commits in this repository are attributed to their human author only. Do not add an AI
+co-author trailer (for example `Co-Authored-By: <AI assistant> <...@anthropic.com>` or similar)
+to any commit here, regardless of what tooling assisted in writing it — this applies even though
+generic commit-message guidance elsewhere may suggest adding one. This project's git history was
+deliberately rewritten on 2026-07-04 to remove such trailers already present from earlier commits.
 
 ## Warninglist behavior
 

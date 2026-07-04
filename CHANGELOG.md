@@ -2,10 +2,56 @@
 
 All notable changes to this project will be documented in this file.
 
-This project is in **early development**. It has been tested with mocked MISP responses only;
-live MISP compatibility testing is still pending.
+This project is in **early development**. It has mocked test coverage plus live-lab validation
+(read-only and controlled-write) against MISP `2.5.42`; broader MISP version compatibility
+testing is still pending.
 
 ## Unreleased
+
+### Production readiness baseline (2026-07-04)
+
+- Added `docs/production-readiness.md`: scope, the read-only-first production target,
+  controlled-write production requirements, required runtime configuration, TLS requirements,
+  secret handling, audit logging/SIEM forwarding guidance, a Docker hardening checklist, a
+  condensed live validation checklist, a release/sign-off checklist (with explicit acceptance
+  criteria, marked done/pending against current evidence), and explicit non-goals.
+- Added `.env.production.example`: a placeholder-only production env template defaulting to
+  `MISP_VERIFY_TLS=true`, `AGENTIC_MISP_MCP_ROLE=read_only`,
+  `AGENTIC_MISP_MCP_ENABLE_WRITE=false`, `AGENTIC_MISP_MCP_REQUIRE_APPROVAL=true`, and
+  `AGENTIC_MISP_MCP_ALLOW_INSECURE_HTTP_BIND=false`. Leaves `AGENTIC_MISP_MCP_APPROVAL_TOKEN`
+  unset (commented out with guidance) rather than blank, to avoid the blank-token ambiguity
+  described below. Added a `.gitignore` exception so the file is tracked.
+- Added a "Production deployment" section to `README.md`: Docker stdio deployment, `config-check`,
+  a MISP connectivity test, audit-log volume mounting, and an explicit statement that HTTP
+  transport requires an authenticated TLS-terminating gateway and is not the default
+  recommendation.
+- Reconciled remaining stale validation-status claims across `README.md`, `PROJECT_STATE.md`,
+  `docs/security.md`, `docs/testing.md`, `docs/live-validation-plan.md`, and `llms.txt`: all now
+  consistently state that live read-only validation and core controlled-write validation have
+  passed in a lab, that production deployment is not yet validated, and that broader MISP
+  compatibility/edge-case validation/production hardening remain pending. Also fixed
+  `docs/live-validation-plan.md` sections 1-3, which were still entirely unchecked despite
+  `README.md` already recording passing evidence for `search_ioc`, `investigate_ioc`,
+  `summarize_event`, and `generate_ioc_report`.
+- No source code changes in this pass; `146` tests still pass.
+
+### README rewrite and security-doc corrections (2026-07-04, follow-up)
+
+- Rewrote the README's "Quick start" section: it previously buried a single Docker-only
+  walkthrough (build image → env file → audit-log dir → connectivity test → MCP Inspector → SSH
+  tunnel) behind a wall of validation-specific steps, with no local (non-Docker) path at all. It
+  is now two short, parallel paths — **Option A: local install** (`pip`/`uv`) and **Option B:
+  Docker** — each with install → configure → validate → run → MCP client config, plus a shared
+  "Verify it's working" step. The deeper validation walkthrough (MCP Inspector, SSH tunneling,
+  read-only test checklist) moved to a renamed "Testing against a live MISP lab (optional)"
+  section further down, deduplicated against the new Quick start.
+- Corrected `docs/security.md`'s stale opening claim ("has not been validated against a live MISP
+  instance") — it has, for both read-only and controlled-write tools; only broader MISP version
+  compatibility remains pending. Also corrected the CHANGELOG's own top-of-file disclaimer to the
+  same effect.
+- Documented the project's commit-provenance policy explicitly in `docs/security.md` and the
+  README's "Contributing" section: commits must not carry an AI co-author trailer, regardless of
+  what tooling assisted in writing them.
 
 ### Controlled-write live validation and fixes (2026-07-04, follow-up)
 

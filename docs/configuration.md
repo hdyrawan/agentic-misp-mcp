@@ -6,6 +6,11 @@ the `AGENTIC_MISP_MCP_*` prefix. Run
 `agentic-misp-mcp config-check` before starting the MCP server to validate local runtime
 configuration without connecting to MISP. The project is distributed under the MIT License.
 
+For a general-purpose starting point, copy `.env.example`. For a production-oriented deployment,
+start from [`.env.production.example`](../.env.production.example) instead, and see
+[`docs/production-readiness.md`](production-readiness.md) for the required runtime configuration,
+TLS, and secret-handling requirements before deploying against a real MISP instance.
+
 | Variable | Required | Default | Description |
 | --- | --- | --- | --- |
 | `MISP_URL` | Yes | none | Base URL for the MISP instance, for example `https://misp.example.local`. |
