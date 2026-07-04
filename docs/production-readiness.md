@@ -54,6 +54,16 @@ already passed in the lab.
 
 ## Controlled-write production requirements
 
+`v0.2.0-beta.1` introduces a narrow production-write pilot for the four existing MISP
+write-executing approval tools only: `submit_ioc_with_approval`, `add_sighting_with_approval`,
+`tag_event_with_approval`, and `publish_event_with_approval`. The beta keeps
+`AGENTIC_MISP_MCP_APPROVAL_MODE=lab` as the default for backward compatibility and requires
+explicit `AGENTIC_MISP_MCP_APPROVAL_MODE=production` to use persisted, one-time-use,
+exact-payload-bound approval request IDs. `propose_event` and `propose_attribute` remain dry-run
+proposal tools and are not part of production approval redemption. See
+[`docs/production-write.md`](production-write.md) for the beta approval-store and operator-CLI
+requirements.
+
 The six controlled write tools (`propose_event`, `propose_attribute`, `submit_ioc_with_approval`,
 `add_sighting_with_approval`, `tag_event_with_approval`, `publish_event_with_approval`) are
 explicitly **out of scope** for the first production target above. Core controlled-write

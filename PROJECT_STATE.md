@@ -67,6 +67,14 @@ Current status:
   failure modes, warninglist endpoint compatibility across MISP versions, broader MISP version
   compatibility, and final sign-off.
 
+- Phase 11 in progress: v0.2.0-beta.1 production-write pilot on branch
+  `feat/v0.2.0-beta-production-write-approvals`. Scope is limited to a production approval layer
+  for the four existing write-executing tools only (`submit_ioc_with_approval`,
+  `add_sighting_with_approval`, `tag_event_with_approval`, `publish_event_with_approval`); no raw
+  proxy, new MISP endpoints, admin MCP tools, or additional write capabilities are in scope.
+  Lab approval mode remains the default unless `AGENTIC_MISP_MCP_APPROVAL_MODE=production` is
+  explicitly configured.
+
 Current tests: 146 passed.
 Current MCP tool count: 19.
 Current license: MIT.
