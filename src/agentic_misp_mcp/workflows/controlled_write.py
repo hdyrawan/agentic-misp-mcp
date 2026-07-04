@@ -453,6 +453,14 @@ async def add_sighting_with_approval_workflow(
         ):
             return _approval_token_blocked_result(tool_name, decision)
     result = await client.add_sighting(payload)
+    if not result.saved:
+        return _failed_result(
+            tool_name,
+            decision,
+            result,
+            approval_request_id=redeemed_request_id,
+            operation_hash_value=op_hash,
+        )
     return _executed_result(
         tool_name,
         decision,

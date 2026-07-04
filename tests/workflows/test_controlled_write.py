@@ -42,7 +42,7 @@ class FakeWriteClient:
 
     async def add_sighting(self, payload):
         self.calls.append(("add_sighting", payload))
-        return MISPSightingSummary(value=payload.get("value"))
+        return MISPSightingSummary(value=payload.get("value"), saved=True)
 
     async def tag_event(self, event_id, tag):
         self.calls.append(("tag_event", event_id, tag))

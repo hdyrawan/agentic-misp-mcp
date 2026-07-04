@@ -62,7 +62,9 @@ class FakeWriteClient:
 
     async def add_sighting(self, payload):
         self.calls.append(("add_sighting", payload))
-        return MISPSightingSummary(value=payload.get("value"), event_id=payload.get("event_id"))
+        return MISPSightingSummary(
+            value=payload.get("value"), event_id=payload.get("event_id"), saved=True
+        )
 
     async def tag_event(self, event_id, tag):
         self.calls.append(("tag_event", event_id, tag))
@@ -81,6 +83,10 @@ class FakeRejectingWriteClient(FakeWriteClient):
     async def tag_event(self, event_id, tag):
         self.calls.append(("tag_event", event_id, tag))
         return MISPTagResult(event_id=event_id, tag=tag, saved=False, message="Invalid Tag.")
+
+    async def add_sighting(self, payload):
+        self.calls.append(("add_sighting", payload))
+        return MISPSightingSummary(saved=False, message="Could not add the Sighting.")
 
     async def publish_event(self, event_id):
         self.calls.append(("publish_event", event_id))
@@ -345,6 +351,27 @@ async def test_tag_event_reports_failed_when_misp_rejects_the_tag(monkeypatch, t
     assert result["status"] == "failed"
     assert result["result"]["saved"] is False
     assert client.calls == [("tag_event", 1, "not-a-real-tag")]
+
+
+@pytest.mark.asyncio
+async def test_add_sighting_reports_failed_when_misp_rejects_the_sighting(monkeypatch, tmp_path):
+    """MISP answers HTTP 200 with just a `message` (no `Sighting` key) when it cannot attach
+    a sighting to a real attribute (e.g. an unknown value). Found during v0.2.0-rc.1 live lab
+    validation: the tool previously reported `executed` for this case."""
+    client = FakeRejectingWriteClient()
+    mcp, _, _ = _register(
+        monkeypatch,
+        tmp_path,
+        client=client,
+        AGENTIC_MISP_MCP_ROLE="analyst_write",
+        AGENTIC_MISP_MCP_ENABLE_WRITE="true",
+    )
+
+    result = await mcp.tools["add_sighting_with_approval"](value="1.2.3.4", approved=True)
+
+    assert result["status"] == "failed"
+    assert result["result"]["saved"] is False
+    assert client.calls == [("add_sighting", {"type": "0", "value": "1.2.3.4"})]
 
 
 @pytest.mark.asyncio
