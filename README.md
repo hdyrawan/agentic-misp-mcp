@@ -12,7 +12,8 @@ It exists because agents should not need unrestricted MISP API access to help wi
 - Mocked test coverage exists for core workflows and policy paths.
 - Live read-only lab validation has passed against MISP `2.5.42` using Docker, stdio transport, and MCP Inspector.
 - Core controlled-write validation has been performed in the same MISP lab (`submit_ioc_with_approval`, `add_sighting_with_approval`, `tag_event_with_approval`, `publish_event_with_approval`, plus role/policy blocking); two real bugs found during that pass are fixed (see below).
-- Edge-case validation and production-hardening checks remain pending: `propose_event`/`propose_attribute` payload validation, large event/result-set behavior, rate-limit/timeout/TLS failure modes, warninglist endpoint compatibility across MISP versions, broader MISP version compatibility, and final sign-off. See `docs/live-validation-plan.md`.
+- Edge-case validation and production-hardening checks remain pending: `propose_event`/`propose_attribute` payload validation, large event/result-set behavior, rate-limit/timeout/TLS failure modes, warninglist endpoint compatibility across MISP versions, broader MISP version compatibility, and final sign-off. See `docs/live-validation-plan.md`. `v0.2.0-beta.2` closed the large-result/rate-limit/warninglist-hit/warninglist-not_available gaps with mocked/controlled tests only — live evidence for those four remains open.
+- `v0.2.0-beta.2` adds `agentic-misp-mcp config doctor` (operational-readiness checks) and `agentic-misp-mcp approvals prune` (operator-CLI-only approval-store maintenance); see [`docs/configuration.md`](docs/configuration.md) and [`docs/rollback.md`](docs/rollback.md).
 - Production deployment is **not yet validated**. See [`docs/production-readiness.md`](docs/production-readiness.md) for the production-readiness scope, requirements, and acceptance criteria.
 - Not production-ready: validated in a lab, not production-certified.
 - Current MCP tool count: **19**.
@@ -436,6 +437,12 @@ conservative deployment shape for the one target that document is scoped against
    This validates configuration and confirms the audit-log path is writable. It does not connect
    to MISP.
 
+   Then run `agentic-misp-mcp config doctor` (same invocation, swap the final argument) for a
+   deeper operational-readiness check: write/approval-mode pairing, publish/role pairing,
+   approval-store and audit-log permission safety, allowlist coverage, approval TTL length, and
+   temporary-directory paths. It also does not connect to MISP, never prints secrets, and exits
+   nonzero on any `FAIL`. See [`docs/configuration.md`](docs/configuration.md#operational-readiness-doctor-v020-beta2).
+
 4. **Test MISP connectivity** before wiring up an MCP client, to confirm the deployment can
    actually reach MISP with the configured TLS settings:
 
@@ -499,7 +506,9 @@ in full — this section covers the conservative deployment shape, not the compl
 - [`docs/approval-flow.md`](docs/approval-flow.md) — lab approval flow plus the `v0.2.0-beta.1` production approval flow.
 - [`docs/live-validation-plan.md`](docs/live-validation-plan.md) — completed lab validation evidence and remaining validation work.
 - [`docs/live-beta-validation-v0.2.0-beta.1.md`](docs/live-beta-validation-v0.2.0-beta.1.md) — live beta validation checklist before tagging `v0.2.0-beta.1`.
+- [`docs/live-beta-validation-v0.2.0-beta.2.md`](docs/live-beta-validation-v0.2.0-beta.2.md) — live validation checklist for the `v0.2.0-beta.2` operational-readiness hardening release.
 - [`docs/production-readiness.md`](docs/production-readiness.md) — production-readiness scope, requirements, and release/sign-off acceptance criteria.
+- [`docs/rollback.md`](docs/rollback.md) — rollback playbook for a mistaken controlled write: finding it in the audit log, correlating it with its approval record, and why a mistaken publish is not fully reversible.
 - [`docs/openapi-inventory.md`](docs/openapi-inventory.md) — sample MISP OpenAPI endpoint classification (planning only).
 
 ## Development
@@ -543,10 +552,18 @@ Two real bugs surfaced during that pass and are now fixed:
 
 ## Roadmap
 
-- Complete remaining live lab validation: `propose_event`/`propose_attribute` payload validation, warninglist edge cases, large event/result-set behavior, rate-limit/timeout/TLS failure modes, broader MISP version compatibility, and final sign-off (`docs/live-validation-plan.md` section 9). (Read-only tools, error paths for unreachable `MISP_URL`/invalid `MISP_API_KEY`, and the four `_with_approval` controlled-write tools are now validated.)
+- Complete remaining *live* validation for warninglist hit, large event/result-set behavior at
+  realistic scale, and HTTP 429/rate-limit behavior — `v0.2.0-beta.2` closed these with
+  mocked/controlled tests only (`docs/live-validation-report-v0.2.0-beta.2.md`).
+  `propose_event`/`propose_attribute` payload validation and broader MISP version compatibility
+  also remain (`docs/live-validation-plan.md` section 9). (Read-only tools, error paths for
+  unreachable `MISP_URL`/invalid `MISP_API_KEY`, and the four `_with_approval` controlled-write
+  tools are now validated live.)
 - Add broader audit outcome tests for additional write tools and error paths.
 - Add stale-intel labeling or event-age weighting for historical OSINT context.
 - Compatibility notes for MISP version differences, especially warninglists and event shapes.
+- Strengthen approval-operator separation beyond filesystem permissions (see
+  `docs/production-readiness.md`'s GA backlog).
 - Release tagging and packaging once the live validation story is documented.
 - Additional controlled workflows only when they preserve the no-raw-proxy, policy-gated model.
 
@@ -564,3 +581,12 @@ The current `main` branch contains the `v0.2.0-beta.1` production-write beta can
 In production mode, `approved=true` alone is blocked, even if `AGENTIC_MISP_MCP_REQUIRE_APPROVAL=false`. Execution requires an operator-approved `approval_request_id` from `agentic-misp-mcp approvals ...`; no MCP tool can approve or reject. Each production approval is one-time-use, TTL-bound by `AGENTIC_MISP_MCP_APPROVAL_TTL_SECONDS`, and bound to the exact canonical operation hash. The LLM/agent must not have shell access to the approval CLI or write access to the SQLite approval database. If redemption succeeds but the later MISP write fails, the approval remains consumed; the operator must approve a new request for any retry. Publishing is disabled by default with `AGENTIC_MISP_MCP_ENABLE_PUBLISH=false`; additional production guardrails include `AGENTIC_MISP_MCP_ALLOWED_ATTRIBUTE_TYPES`, `AGENTIC_MISP_MCP_ALLOWED_ATTRIBUTE_CATEGORIES`, and `AGENTIC_MISP_MCP_ALLOWED_TAGS`.
 
 See `docs/production-write.md` for the full beta deployment guidance and approval-store permission requirements.
+
+### v0.2.0-beta.2 operational-readiness hardening
+
+`v0.2.0-beta.2` builds on the `v0.2.0-beta.1` production-write beta with operator tooling and closed test gaps. It adds no new MCP tools, no new MISP write capability, and is still a beta, not GA production-ready.
+
+- `agentic-misp-mcp config doctor` — a deeper operational-readiness check beyond `config-check`: validates write/approval-mode pairing, publish/role pairing, approval-store and audit-log permission safety, production write allowlist coverage, approval TTL length, temporary-directory paths, and leftover lab approval tokens in production mode. Outputs `PASS`/`WARN`/`FAIL` per check, never prints secrets, and exits nonzero on any `FAIL`.
+- `agentic-misp-mcp approvals prune --older-than <duration> [--vacuum]` — operator-CLI-only maintenance that deletes old terminal (`used`/`rejected`/`expired`) approval records past an age threshold (`7d`, `30d`, `24h`, `3600s`-style durations), optionally followed by SQLite `VACUUM`. Never deletes `pending`/`approved` records. Not exposed through any MCP tool.
+- [`docs/rollback.md`](docs/rollback.md) — a rollback playbook for a mistaken controlled write.
+- Closed four `v0.2.0-beta.1` live-validation gaps with mocked/controlled tests: HTTP `429`, large-response truncation, a positive warninglist hit, and warninglist `not_available`, each exercised through the full registered-tool and audit path. See [`docs/live-validation-report-v0.2.0-beta.2.md`](docs/live-validation-report-v0.2.0-beta.2.md) for what was additionally validated live (the two new CLI commands, plus a read-only regression smoke test).

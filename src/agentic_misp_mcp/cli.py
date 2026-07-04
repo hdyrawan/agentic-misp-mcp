@@ -8,6 +8,7 @@ from pydantic import ValidationError
 from agentic_misp_mcp import __version__
 from agentic_misp_mcp.cli_approvals import add_approvals_subparser, handle_approvals_command
 from agentic_misp_mcp.config_check import check_configuration, format_validation_error_lines
+from agentic_misp_mcp.config_doctor import run_config_doctor_cli
 from agentic_misp_mcp.openapi import generate_markdown_inventory_file
 from agentic_misp_mcp.server import StartupConfigurationError, run_server
 
@@ -23,6 +24,21 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers.add_parser(
         "config-check",
         help="Validate environment configuration without connecting to MISP.",
+    )
+
+    config_parser = subparsers.add_parser(
+        "config",
+        help="Configuration operational-readiness commands.",
+    )
+    config_subparsers = config_parser.add_subparsers(dest="config_command", required=True)
+    config_subparsers.add_parser(
+        "doctor",
+        help=(
+            "Validate operational-readiness configuration combinations (write/approval mode, "
+            "publish role, approval store and audit log safety, allowlists, TTL, temp paths, "
+            "and leftover approval tokens). Outputs PASS/WARN/FAIL, redacts secrets, and exits "
+            "nonzero on any FAIL."
+        ),
     )
 
     add_approvals_subparser(subparsers)
@@ -72,6 +88,11 @@ def main(argv: list[str] | None = None) -> int:
         stream = sys.stdout if result.ok else sys.stderr
         stream.write(result.render())
         return 0 if result.ok else 2
+
+    if args.command == "config":
+        if args.config_command == "doctor":
+            return run_config_doctor_cli()
+        parser.exit(2, "Unknown config command\n")
 
     if args.command == "approvals":
         return handle_approvals_command(args)

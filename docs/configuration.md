@@ -87,6 +87,35 @@ agentic-misp-mcp config-check
 The command checks required values, type parsing, safe limit bounds, and audit-log path
 writability. It does not connect to MISP and never prints the API key.
 
+## Operational-readiness doctor (v0.2.0-beta.2+)
+
+```bash
+agentic-misp-mcp config doctor
+```
+
+`config doctor` goes beyond `config-check`'s basic validation and checks operational-readiness
+combinations: whether write mode is paired with production approval mode, whether publish is
+paired with a curator/admin role, approval-store and audit-log writability and permission safety,
+production write allowlist coverage, approval TTL length, temporary-directory paths, and leftover
+lab approval tokens in production mode. Output is a line per check prefixed `PASS`, `WARN`, or
+`FAIL`; secrets (`MISP_API_KEY`, `AGENTIC_MISP_MCP_APPROVAL_TOKEN`) are never printed, only their
+presence/absence. It does not connect to MISP. The command exits nonzero if any check is `FAIL`.
+Run it alongside `config-check` in a deployment pipeline or init container before starting the
+server. See [`docs/production-readiness.md`](production-readiness.md) for the full checklist.
+
+## Approval store maintenance (v0.2.0-beta.2+)
+
+```bash
+agentic-misp-mcp approvals prune --older-than 30d [--vacuum]
+```
+
+Deletes old terminal (`used`, `rejected`, `expired`) approval records past the given age
+threshold. `--older-than` accepts a duration with an explicit `s`/`h`/`d` suffix (for example
+`3600s`, `24h`, `7d`, `30d`); an invalid duration exits nonzero without touching the store.
+`pending` and `approved` records are never deleted regardless of age. Pass `--vacuum` to run
+SQLite `VACUUM` afterward and reclaim disk space. This is an operator-CLI-only maintenance command
+and is not exposed through any MCP tool — the LLM/agent cannot prune or vacuum the approval store.
+
 ## Local stdio run
 
 ```bash

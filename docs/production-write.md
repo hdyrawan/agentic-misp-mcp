@@ -74,11 +74,30 @@ install -d -m 700 -o agentic-misp-mcp -g agentic-misp-mcp /var/lib/agentic-misp-
 
 The database is created with mode `0600`.
 
+Old terminal (`used`/`rejected`/`expired`) records can accumulate over time. Prune them
+periodically with the operator-CLI-only maintenance command:
+
+```bash
+agentic-misp-mcp approvals prune --older-than 30d [--vacuum]
+```
+
+This never deletes `pending` or `approved` records regardless of age, and is not reachable
+through any MCP tool. See [`docs/configuration.md`](configuration.md#approval-store-maintenance-v020-beta2) for duration syntax.
+
 ## Critical trust boundary
 
 Production approval mode is meaningful only if the LLM agent cannot run the approval CLI and cannot write to the approval SQLite database. If the agent has shell access as the operator user, write access to the approval database, or control over the host, it can bypass the human approval boundary. Use separate OS users, filesystem permissions, and process boundaries.
 
 This beta does not solve compromised-host or compromised-operator scenarios. MISP-side RBAC and scoped API keys are still required.
+
+Run `agentic-misp-mcp config doctor` before enabling any production write deployment; it checks
+this trust boundary's operational preconditions (write/approval mode pairing, approval-store and
+audit-log permission safety, allowlist coverage, approval TTL length) and exits nonzero on any
+unsafe combination. See [`docs/configuration.md`](configuration.md#operational-readiness-doctor-v020-beta2).
+
+If a controlled write turns out to be a mistake, see [`docs/rollback.md`](rollback.md) for how to
+find it in the audit log, correlate it with its approval record, and roll it back directly in
+MISP — including why a mistaken publish is not fully reversible.
 
 ## Audit fields
 

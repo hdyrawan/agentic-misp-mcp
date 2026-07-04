@@ -3,7 +3,6 @@ from __future__ import annotations
 import json
 import os
 import sqlite3
-import stat
 from datetime import UTC, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Protocol
@@ -17,6 +16,7 @@ from agentic_misp_mcp.policy.models import (
     Role,
     StoredApprovalRecord,
 )
+from agentic_misp_mcp.security.permissions import unsafe_permissions_reason
 
 TERMINAL_STATUSES = {
     ApprovalStatus.USED,
@@ -353,6 +353,41 @@ class SqliteApprovalStore:
             )
             return cursor.rowcount
 
+    def prune(
+        self, *, older_than_seconds: int, vacuum: bool = False, now: datetime | None = None
+    ) -> int:
+        """Delete old terminal (used/rejected/expired) records. Never touches pending/approved.
+
+        Operator-CLI-only maintenance; not reachable through any MCP tool.
+        """
+        self.expire_stale(now=now)
+        now = now or datetime.now(timezone.utc)  # noqa: UP017
+        cutoff = _format_dt(now - timedelta(seconds=older_than_seconds))
+        with self._connect() as conn:
+            cursor = conn.execute(
+                """
+                DELETE FROM approvals
+                WHERE (status = ? AND used_at IS NOT NULL AND used_at <= ?)
+                   OR (status = ? AND rejected_at IS NOT NULL AND rejected_at <= ?)
+                   OR (status = ? AND expires_at <= ?)
+                """,
+                (
+                    ApprovalStatus.USED.value,
+                    cutoff,
+                    ApprovalStatus.REJECTED.value,
+                    cutoff,
+                    ApprovalStatus.EXPIRED.value,
+                    cutoff,
+                ),
+            )
+            deleted = cursor.rowcount
+        if vacuum:
+            # VACUUM cannot run inside a pending transaction, so use a fresh connection
+            # after the delete above has already been committed.
+            with self._connect() as conn:
+                conn.execute("VACUUM")
+        return deleted
+
     def _initialize(self) -> None:
         with self._connect() as conn:
             conn.execute(
@@ -461,14 +496,6 @@ def _parse_optional_dt(value: str | None) -> datetime | None:
 
 
 def _enforce_safe_store_path(path: Path) -> None:
-    parent = path.parent
-    if parent.exists():
-        parent_mode = stat.S_IMODE(parent.stat().st_mode)
-        if parent_mode & (stat.S_IWGRP | stat.S_IWOTH):
-            raise ApprovalStoreError(
-                f"approval store parent directory is group/world writable: {parent}"
-            )
-    if path.exists():
-        mode = stat.S_IMODE(path.stat().st_mode)
-        if mode & (stat.S_IWGRP | stat.S_IWOTH):
-            raise ApprovalStoreError(f"approval store database is group/world writable: {path}")
+    reason = unsafe_permissions_reason(path, check_group=True)
+    if reason:
+        raise ApprovalStoreError(f"approval store {reason}")

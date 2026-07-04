@@ -41,6 +41,24 @@ def add_approvals_subparser(
     reject_parser.add_argument("request_id")
     reject_parser.add_argument("--reason", required=True)
 
+    prune_parser = approval_commands.add_parser(
+        "prune",
+        help=(
+            "Delete old terminal (used/rejected/expired) approval records. Never removes "
+            "pending or approved records. CLI-only; not exposed through any MCP tool."
+        ),
+    )
+    prune_parser.add_argument(
+        "--older-than",
+        required=True,
+        help="Age threshold for terminal records, e.g. 30d, 7d, 24h, or 3600s.",
+    )
+    prune_parser.add_argument(
+        "--vacuum",
+        action="store_true",
+        help="Run SQLite VACUUM after deleting rows to reclaim disk space.",
+    )
+
 
 def handle_approvals_command(args: argparse.Namespace) -> int:
     try:
@@ -77,11 +95,43 @@ def handle_approvals_command(args: argparse.Namespace) -> int:
             record = store.reject(args.request_id, reason=args.reason)
             sys.stdout.write(_render_compact(record) + "\n")
             return 0
+        if args.approvals_command == "prune":
+            try:
+                older_than_seconds = parse_duration(args.older_than)
+            except ValueError as exc:
+                sys.stderr.write(f"Invalid --older-than value: {exc}\n")
+                return 2
+            deleted = store.prune(older_than_seconds=older_than_seconds, vacuum=args.vacuum)
+            suffix = " (vacuumed)" if args.vacuum else ""
+            sys.stdout.write(f"Pruned {deleted} approval record(s){suffix}\n")
+            return 0
     except ApprovalStoreError as exc:
         sys.stderr.write(f"Approval store error: {exc}\n")
         return 1
     sys.stderr.write("Unknown approvals command\n")
     return 2
+
+
+def parse_duration(value: str) -> int:
+    """Parse a duration like '30d', '7d', '24h', or '3600s' into whole seconds.
+
+    Supported suffixes: `s` (seconds), `h` (hours), `d` (days). Requires an explicit suffix
+    so callers cannot accidentally pass a bare, ambiguous integer.
+    """
+    stripped = value.strip().lower()
+    if len(stripped) < 2:
+        raise ValueError(f"duration must include a unit suffix (s/h/d): {value!r}")
+    suffix = stripped[-1]
+    amount_text = stripped[:-1]
+    multipliers = {"s": 1, "h": 3600, "d": 86400}
+    if suffix not in multipliers:
+        raise ValueError(f"unsupported duration suffix {suffix!r} in {value!r}; use s, h, or d")
+    if not amount_text.isdigit():
+        raise ValueError(f"invalid duration amount in {value!r}")
+    amount = int(amount_text)
+    if amount < 0:
+        raise ValueError(f"duration must not be negative: {value!r}")
+    return amount * multipliers[suffix]
 
 
 def _is_lifecycle_status(status: ApprovalStatus) -> bool:

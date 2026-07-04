@@ -216,24 +216,58 @@ Use separate deployments per role rather than one broad deployment that can do e
       `docker-compose.example.yml`), so logs persist across container restarts/recreation and are
       not baked into the image.
 - [ ] Consider running the container with a read-only root filesystem (`docker run --read-only`
-      or Compose's `read_only: true`), with only the audit-log volume writable. Not currently
-      configured in the example Dockerfile/Compose file — evaluate before production use.
+      or Compose's `read_only: true`), with only the audit-log and approval-store volumes
+      writable. Not currently configured in the example Dockerfile/Compose file — evaluate before
+      production use. For example:
+
+      ```bash
+      docker run --rm -i --read-only \
+        --env-file .env \
+        -v "$PWD/logs:/app/logs" \
+        -v "$PWD/approvals:/app/approvals" \
+        --tmpfs /tmp \
+        agentic-misp-mcp:local --transport stdio
+      ```
+
+      The `--tmpfs /tmp` mount gives the read-only container a small writable scratch area for
+      anything the Python runtime itself needs at startup, without making the rest of the
+      filesystem writable.
 - [ ] Apply resource limits (`--memory`, `--cpus`, or the orchestrator equivalent) appropriate to
       your deployment. Not currently set in the example Compose file.
 - [ ] Pin and periodically rebuild the base image (`python:3.11-slim`) to pick up security
       patches; this project does not currently automate base-image update tracking.
-- [ ] Do not publish port `8000` unless you are intentionally running the experimental HTTP
-      transport behind an authenticated TLS-terminating gateway (see "TLS requirements" above).
-      The example Compose file's HTTP service is commented out by default.
-- [ ] Run `agentic-misp-mcp config-check` as part of your deployment pipeline (a pre-flight check
-      in CI/CD or an init container) before starting the server, to catch configuration mistakes
-      before they reach production traffic.
+- [ ] Keep stdio as the default transport. Do not publish port `8000` or expose HTTP to any
+      network unless you are intentionally running the experimental HTTP transport behind an
+      authenticated, TLS-terminating gateway (reverse proxy or service mesh sidecar) that
+      terminates TLS and enforces authentication before traffic reaches this server — see "TLS
+      requirements" above. The example Compose file's HTTP service is commented out by default,
+      and HTTP mode itself refuses to bind `0.0.0.0` unless
+      `AGENTIC_MISP_MCP_ALLOW_INSECURE_HTTP_BIND=true` is explicitly set.
+- [ ] Run `agentic-misp-mcp config-check` and `agentic-misp-mcp config doctor` as part of your
+      deployment pipeline (a pre-flight check in CI/CD or an init container) before starting the
+      server, to catch configuration mistakes and unsafe operational combinations (write/approval
+      mode mismatches, publish/role mismatches, unsafe approval-store or audit-log permissions,
+      missing allowlists, long approval TTLs, leftover lab tokens) before they reach production
+      traffic. `config doctor` exits nonzero on any `FAIL`.
+- [ ] Deploy read-only, analyst-write, and curator/publish roles as **separate** deployments with
+      their own least-privilege MISP API keys (see the role-separation bullets above), rather than
+      one broad deployment capable of everything.
+- [ ] Use generic, non-identifying paths and hostnames in committed configuration, container
+      images, and documentation (for example `/var/lib/agentic-misp-mcp`, not an internal hostname
+      or a real operator's home directory) — this project's own docs and examples follow this
+      convention and real deployments should too.
+- [ ] Have a rollback plan ready before enabling any write-capable deployment — see
+      [`docs/rollback.md`](rollback.md) for mistaken-write recovery, audit correlation, and why a
+      mistaken publish is not fully reversible.
 
 ## Live validation checklist
 
 Full completed lab-validation evidence lives in
 [`docs/live-validation-plan.md`](live-validation-plan.md). The `v0.2.0-beta.1` live beta sign-off checklist lives in
-[`docs/live-beta-validation-v0.2.0-beta.1.md`](live-beta-validation-v0.2.0-beta.1.md). This is a condensed status summary.
+[`docs/live-beta-validation-v0.2.0-beta.1.md`](live-beta-validation-v0.2.0-beta.1.md), and the
+`v0.2.0-beta.2` operational-readiness checklist lives in
+[`docs/live-beta-validation-v0.2.0-beta.2.md`](live-beta-validation-v0.2.0-beta.2.md). This is a
+condensed status summary.
 
 Passed:
 
@@ -257,6 +291,16 @@ Not yet passed / not yet attempted:
 - TLS-untrusted-certificate fail-closed behavior with `MISP_VERIFY_TLS=true` (section 6).
 - Warninglist hit/miss/`not_available` behavior and endpoint compatibility across MISP versions
   (section 7).
+
+`v0.2.0-beta.2` added mocked/controlled test coverage for four of the items above — HTTP `429`
+handling, large-response truncation, a positive warninglist hit, and warninglist `not_available`
+— exercised through the full registered-tool and audit path
+(`tests/test_operational_gap_closure.py`). This closes the coverage gap at the test-suite level
+only; none of the four have live evidence yet, since reproducing a live `429` or an oversized live
+MISP result deliberately was treated as out of scope (no DoS-style testing against the lab). See
+[`docs/live-validation-report-v0.2.0-beta.2.md`](live-validation-report-v0.2.0-beta.2.md) for what
+was validated live in `v0.2.0-beta.2` instead: the new `config doctor` and `approvals prune`
+operator-CLI commands, plus a read-only regression smoke test.
 
 ## Release/sign-off checklist
 
@@ -287,11 +331,20 @@ are true. Status reflects this document's date of writing; re-verify before rely
 
 The following items are **not required** to run the `v0.2.0-beta.1` isolated live beta validation, but they are required before any GA production-readiness claim:
 
-- [ ] Add a stronger config doctor/config-check that validates production approval-mode combinations, approval-store permissions, publish split-deployment expectations, and allowlist coverage.
-- [ ] Add an approval DB pruning/vacuum command for expired/used/rejected records, with safe retention guidance.
+- [x] Add a stronger config doctor that validates production approval-mode combinations,
+      approval-store/audit-log permissions, publish role expectations, and allowlist coverage.
+      **Done in `v0.2.0-beta.2`** — `agentic-misp-mcp config doctor` (PASS/WARN/FAIL, secrets
+      redacted, nonzero exit on `FAIL`); see `docs/testing.md` and `CHANGELOG.md`.
+- [x] Add an approval DB pruning/vacuum command for expired/used/rejected records, with safe
+      retention guidance. **Done in `v0.2.0-beta.2`** — `agentic-misp-mcp approvals prune
+      --older-than <duration> [--vacuum]`, CLI-only, never exposed as an MCP tool; only removes
+      terminal (`used`/`rejected`/`expired`) records past the age threshold and never touches
+      `pending`/`approved` records.
 - [ ] Strengthen approval-operator separation beyond filesystem permissions, for example documented separate users/hosts or an operator-only administrative container.
 - [ ] Build and publish a MISP version compatibility matrix covering warninglists, event shapes, attribute/sighting/tag/publish response shapes, and error behavior.
-- [ ] Write a rollback playbook for mistaken writes, including MISP UI/API steps outside this project because the MCP server intentionally has no delete/unpublish/retract tools.
+- [x] Write a rollback playbook for mistaken writes, including MISP UI/API steps outside this
+      project because the MCP server intentionally has no delete/unpublish/retract tools.
+      **Done in `v0.2.0-beta.2`** — see [`docs/rollback.md`](rollback.md).
 - [ ] Add container image scanning to the release pipeline.
 - [ ] Add dependency vulnerability scanning to CI/release checks.
 - [ ] Add secret scanning for repository history and release artifacts.

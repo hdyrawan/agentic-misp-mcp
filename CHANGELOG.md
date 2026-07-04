@@ -8,6 +8,53 @@ testing is still pending.
 
 ## Unreleased
 
+### v0.2.0-beta.2 operational-readiness hardening (2026-07-04)
+
+`v0.2.0-beta.2` builds on the `v0.2.0-beta.1` production-write approval beta with operational
+tooling and closed test gaps. It adds no new MCP tools, no new MISP write capability, and no raw
+proxy/admin behavior; it is still a beta, not a GA production-readiness claim.
+
+- Added `agentic-misp-mcp config doctor`, a deeper operational-readiness check beyond
+  `config-check`: validates write/approval-mode pairing, publish/role pairing, approval-store and
+  audit-log writability and permission safety, production write allowlist coverage, approval TTL
+  length, temporary-directory paths, and leftover lab approval tokens in production mode. Output
+  is `PASS`/`WARN`/`FAIL` per check, secrets are never printed, and the command exits nonzero on
+  any `FAIL`. See `src/agentic_misp_mcp/config_doctor.py` and `docs/configuration.md`.
+- Added `agentic-misp-mcp approvals prune --older-than <duration> [--vacuum]`, an operator-CLI-only
+  maintenance command that deletes old terminal (`used`/`rejected`/`expired`) approval records
+  past an age threshold (`7d`/`30d`/`24h`/`3600s`-style durations), optionally followed by SQLite
+  `VACUUM`. Never deletes `pending`/`approved` records regardless of age. An invalid duration exits
+  nonzero without mutating the store. Not exposed through any MCP tool — the LLM/agent cannot
+  prune or vacuum the approval store. See `SqliteApprovalStore.prune()` in
+  `src/agentic_misp_mcp/policy/approval_store.py`.
+- Added `docs/rollback.md`: how to find a mistaken controlled write in the audit log, correlate it
+  with its approval record, and roll it back directly in MISP (no delete/unpublish/retract MCP
+  tool exists by design), plus an explicit explanation of why a mistaken publish is not fully
+  reversible.
+- Expanded Docker production guidance in `docs/production-readiness.md`: a concrete read-only
+  root-filesystem `docker run` example, explicit stdio-first/no-public-HTTP-by-default guidance,
+  role-separated least-privilege deployment guidance, and a "generic paths only" convention
+  reminder.
+- Closed four `v0.2.0-beta.1` live-validation gaps with mocked/controlled tests exercised through
+  the full registered-tool and audit path (`tests/test_operational_gap_closure.py`): HTTP `429`
+  (`MISPRateLimitError`) propagates cleanly with no crash and no secret leak in the audit record;
+  an oversized MISP response (`MISPResponseTooLargeError`) is bounded and never dumped into the
+  audit log; a positive warninglist hit surfaces correctly through the registered
+  `check_warninglists` tool; and warninglist `not_available` surfaces correctly through the same
+  path. These are mocked/controlled closures, not live reproductions of a real `429` or an
+  oversized live MISP result — see `docs/live-validation-report-v0.2.0-beta.2.md` for what was
+  validated live instead (the new CLI commands, plus a read-only regression smoke test).
+- Added regression/contract tests: `tests/test_config_doctor.py` (21 tests),
+  `tests/test_approvals_prune.py` (20 tests), and `tests/test_operational_gap_closure.py` (6
+  tests), plus `test_write_tool_count_unchanged_at_six` and
+  `test_no_config_doctor_or_approvals_prune_mcp_tools_exist` in `tests/test_tools_contract.py`
+  confirming the write-tool surface and the no-new-MCP-tool boundary are unchanged.
+- Added `docs/live-beta-validation-v0.2.0-beta.2.md` and
+  `docs/live-validation-report-v0.2.0-beta.2.md`: `config doctor` and `approvals prune` were run
+  against the same non-production MISP `2.5.42` lab used for `v0.2.0-beta.1`, plus a read-only
+  regression smoke test (`check_warninglists`, `search_attributes`) confirming this release's
+  additive-only CLI changes did not regress the existing read-only path. No bugs found.
+
 ### Live beta validation hardening (2026-07-04)
 
 - Clarified that `main` now contains the `v0.2.0-beta.1` production-write beta candidate and that it is suitable for isolated pilot validation only, not GA production readiness.
