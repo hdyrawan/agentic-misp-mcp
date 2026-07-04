@@ -13,15 +13,15 @@ Current status:
   CLI command. Classifies MISP OpenAPI endpoints into read/write/admin/sync/dangerous/unknown
   with risk level, approval_required, and recommended_role. Does not expose any MISP API
   endpoint as an MCP tool.
-- Phase 7 complete: policy and approval foundation (`policy/engine.py`, `policy/approvals.py`,
-  `policy/models.py`), plus `AGENTIC_MISP_MCP_ROLE` / `AGENTIC_MISP_MCP_ENABLE_WRITE` /
+- Policy/approval foundation complete: `policy/engine.py`, `policy/approvals.py`,
+  `policy/models.py`, plus `AGENTIC_MISP_MCP_ROLE` / `AGENTIC_MISP_MCP_ENABLE_WRITE` /
   `AGENTIC_MISP_MCP_REQUIRE_APPROVAL` settings. Read-only tool boundary unchanged (13 tools).
 - Phase 8 complete: controlled write workflows. Added exactly six new MCP tools
   (`propose_event`, `propose_attribute`, `submit_ioc_with_approval`,
   `add_sighting_with_approval`, `tag_event_with_approval`, `publish_event_with_approval`),
-  wired into the Phase 7 `PolicyEngine`/`ApprovalRequest` foundation. Added a `publish` policy
-  action (curator/admin only). Added narrow MISP write methods (`create_event`,
-  `add_attribute`, `add_sighting`, `tag_event`, `publish_event`) to `misp/client.py` — no
+  wired into the `PolicyEngine`/`ApprovalRequest` foundation. Added a `publish` policy
+  action (curator/admin only). Added narrow MISP write methods (`add_attribute`,
+  `add_sighting`, `tag_event`, `publish_event`) to `misp/client.py` — no
   generic write/request proxy. Writes are disabled by default
   (`AGENTIC_MISP_MCP_ENABLE_WRITE=false`), and even when enabled, every write tool call
   resolves to `blocked`, `pending_approval`, or `executed` — never a silent write.
@@ -30,10 +30,10 @@ Current status:
   hardening tests, and documentation updates for CI, early-development status, HTTP transport
   warnings, runtime-only secrets, and Phase 8 policy environment variables. Tool behavior and
   MCP tool count remain unchanged.
-- Phase 10 release-ready: repository hygiene, tracked-file inventory, sensitive-content scan,
+- Phase 10 alpha public-readiness: repository hygiene, tracked-file inventory, sensitive-content scan,
   README/security/changelog/project-state review, version check, final quality gates, and Docker
   release-check validation completed for safe public GitHub publishing as an early-development
-  MIT-licensed open-source project. README has been rewritten for publish readiness, and
+  MIT-licensed open-source project. README has been rewritten for public publish readiness, and
   `llms.txt` has been added for LLM/coding-agent orientation. No git tag has been created.
 - Phase 10.1 complete: external review follow-up documentation added. Added `docs/testing.md`
   (mocked endpoint/response/workflow coverage and known gaps), `docs/roles.md` (per-role
@@ -50,7 +50,7 @@ Current status:
   behavior can be designed against confirmed real MISP response shapes rather than mocked
   assumptions.
 
-Current tests: 124 passed.
+Current tests: 139 passed.
 Current MCP tool count: 19.
 Current license: MIT.
 

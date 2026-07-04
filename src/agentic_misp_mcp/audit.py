@@ -10,30 +10,9 @@ from pathlib import Path
 from typing import Any, TypeVar
 
 from agentic_misp_mcp.policy.models import PolicyDecision
+from agentic_misp_mcp.security.sanitization import safe_error_message, sanitize_for_audit
 
 T = TypeVar("T")
-
-SENSITIVE_KEYS = {"api_key", "authorization", "authkey", "headers", "misp_api_key", "token"}
-
-
-def sanitize_for_audit(value: Any) -> Any:
-    """Return a JSON-serializable copy with sensitive fields redacted."""
-    if isinstance(value, Mapping):
-        sanitized = {}
-        for key, nested in value.items():
-            key_text = str(key)
-            if key_text.lower() in SENSITIVE_KEYS:
-                sanitized[key_text] = "[REDACTED]"
-            else:
-                sanitized[key_text] = sanitize_for_audit(nested)
-        return sanitized
-    if isinstance(value, list):
-        return [sanitize_for_audit(item) for item in value]
-    if isinstance(value, tuple):
-        return [sanitize_for_audit(item) for item in value]
-    if isinstance(value, Path):
-        return str(value)
-    return value
 
 
 class AuditLogger:
@@ -81,7 +60,7 @@ async def audit_call(
                 "success": False,
                 "duration_ms": duration_ms,
                 "error_type": type(exc).__name__,
-                "error_message": str(exc),
+                "error_message": safe_error_message(exc),
             }
         )
         raise

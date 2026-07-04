@@ -10,7 +10,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     """Runtime configuration loaded from environment variables."""
 
-    model_config = SettingsConfigDict(extra="ignore")
+    model_config = SettingsConfigDict(extra="ignore", hide_input_in_errors=True)
 
     misp_url: AnyHttpUrl = Field(validation_alias="MISP_URL")
     misp_api_key: str = Field(validation_alias="MISP_API_KEY", min_length=1)
@@ -41,6 +41,15 @@ class Settings(BaseSettings):
     enable_write: bool = Field(default=False, validation_alias="AGENTIC_MISP_MCP_ENABLE_WRITE")
     require_approval: bool = Field(
         default=True, validation_alias="AGENTIC_MISP_MCP_REQUIRE_APPROVAL"
+    )
+    approval_token: str | None = Field(
+        default=None, validation_alias="AGENTIC_MISP_MCP_APPROVAL_TOKEN"
+    )
+    max_response_bytes: int = Field(
+        default=5_242_880, validation_alias="AGENTIC_MISP_MCP_MAX_RESPONSE_BYTES", ge=1024
+    )
+    allow_insecure_http_bind: bool = Field(
+        default=False, validation_alias="AGENTIC_MISP_MCP_ALLOW_INSECURE_HTTP_BIND"
     )
 
     @field_validator("misp_api_key")

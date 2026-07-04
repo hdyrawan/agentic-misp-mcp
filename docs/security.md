@@ -1,7 +1,7 @@
 # Security model
 
 This MIT-licensed project is intentionally workflow-first and in early development. It has not been
-validated against a live MISP instance and should not be treated as production-ready.
+validated against a live MISP instance and should not be treated as production software.
 
 ## Read-only by default; controlled write behind policy and approval
 
@@ -16,8 +16,8 @@ audit wrapper.
 
 ## Policy and approval enforcement
 
-Phase 7 added policy enforcement primitives; Phase 8 wires them into real, gated write
-workflows. The runtime policy environment variables are:
+The policy engine enforces role, write-mode, and approval requirements before controlled write
+workflows run. The runtime policy environment variables are:
 
 - `AGENTIC_MISP_MCP_ROLE=read_only` by default. Supported roles are `read_only`,
   `analyst_write`, `curator`, and `admin`.
@@ -26,6 +26,9 @@ workflows. The runtime policy environment variables are:
   unavailable regardless of this setting (no tool uses those action categories).
 - `AGENTIC_MISP_MCP_REQUIRE_APPROVAL=true` by default. Role-allowed write/publish actions
   require explicit approval when this is enabled.
+- `AGENTIC_MISP_MCP_APPROVAL_TOKEN` is optional. When configured and approval is required,
+  approved write calls must include the matching `approval_token`; missing or incorrect tokens
+  return `blocked`. The token is redacted from audit logs and returned errors.
 
 The original 13 read tools are classified as `read` and remain allowed under `read_only`.
 
@@ -37,19 +40,20 @@ The original 13 read tools are classified as `read` and remain allowed under `re
   role/write-mode does not even allow proposing the write.
 - `submit_ioc_with_approval`, `add_sighting_with_approval`, `tag_event_with_approval`, and
   `publish_event_with_approval` each accept an `approved: bool = False` argument (explicit
-  approval input). Each call returns one of:
+  approval input) and optional `approval_token`. Each call returns one of:
   - `blocked` — write mode disabled, or role does not permit the action. No MISP call is made.
   - `pending_approval` — role permits the action but approval is required and `approved` was
     not set. Returns a sanitized `ApprovalRequest` proposal. No MISP call is made.
   - `executed` — role permits the action and (approval not required, or `approved=True` was
-    explicitly passed). Only in this branch is the corresponding MISP write method called.
+    explicitly passed, plus a matching `approval_token` when token enforcement is configured).
+    Only in this branch is the corresponding MISP write method called.
 - `publish_event_with_approval` uses a dedicated `publish` policy action restricted to
   `curator`/`admin` roles, is always classified `high` risk, and is always approval-gated when
   `AGENTIC_MISP_MCP_REQUIRE_APPROVAL=true`.
 - No write ever happens silently: every branch above (including `blocked`) is audited, and only
-  the `executed` branch invokes a MISP write method (`create_event`, `add_attribute`,
-  `add_sighting`, `tag_event`, `publish_event` in `misp/client.py`). There is no generic request
-  proxy — each write tool maps to exactly one narrow MISP write method.
+  the `executed` branch invokes a narrow MISP write method (`add_attribute`, `add_sighting`,
+  `tag_event`, `publish_event` in `misp/client.py`). There is no event-creation MCP tool and no
+  `submit_event_with_approval` in v0.1. There is no generic request proxy.
 
 ## MCP tool boundary
 
@@ -89,9 +93,10 @@ admin tools exist.
 Use `agentic-misp-mcp config-check` to validate that `MISP_API_KEY` is present. The command
 redacts the key and does not connect to MISP.
 
-MCP tool schemas must not include API key, token, password, authorization header, or other
-credential parameters. Do not use a tool call as a token passthrough mechanism; rotate any real
-secret that is accidentally sent in a prompt, issue, test fixture, audit log, or CI log.
+MCP tool schemas must not include API key, password, authorization header, or other credential
+parameters. The only token-shaped tool parameter is the optional `approval_token` used for
+approval hardening; it is redacted defensively from audit logs. Rotate any real secret that is
+accidentally sent in a prompt, issue, test fixture, audit log, or CI log.
 
 ## TLS
 
@@ -99,7 +104,10 @@ TLS verification is enabled by default with `MISP_VERIFY_TLS=true`. Disabling TL
 
 ## Audit logging
 
-Every MCP tool call writes one JSONL audit record, including failures. Audit records include tool name, sanitized arguments, policy decision fields, status, duration, and error type/message. They do not include authorization headers or API keys.
+Every MCP tool call writes one JSONL audit record, including failures. Audit records include tool
+name, sanitized arguments, policy decision fields, status, duration, and safe error type/message.
+They do not include authorization headers, API keys, approval tokens, authkeys, cookies, passwords,
+or raw backend response bodies.
 
 The audit log path is validated at startup. Its parent directory must already be writable or be
 creatable by the runtime user. Container examples mount `./logs` into `/app/logs` so logs persist
@@ -113,8 +121,10 @@ without baking secrets or runtime state into the image.
 - The Docker image exposes port `8000` only for optional experimental HTTP mode; stdio remains the
   primary supported transport.
 - Do not bake `MISP_URL` or `MISP_API_KEY` into Dockerfiles, images, or committed config.
-- Treat HTTP transport as experimental. If enabled, bind it only on a trusted interface or place it
-  behind an authenticated, TLS-terminating gateway. Do not expose it directly to the internet.
+- Treat HTTP transport as experimental. Binding to `0.0.0.0` is refused by default because HTTP
+  mode has no built-in auth/TLS. Use loopback (`127.0.0.1`) unless explicitly setting
+  `AGENTIC_MISP_MCP_ALLOW_INSECURE_HTTP_BIND=true` behind an authenticated TLS-terminating
+  gateway.
 
 ## Output limits
 
@@ -125,6 +135,9 @@ All event- and IOC-oriented tools (`investigate_ioc`, `summarize_event`, `pivot_
 JSON. They respect `MISP_EVENT_ATTRIBUTE_LIMIT` and `MISP_RELATED_EVENT_LIMIT`, and each tool's
 own `limit` argument. The two Markdown report tools return deterministic, bounded text — no
 LLM call is made to generate them.
+
+MISP HTTP responses are capped by `AGENTIC_MISP_MCP_MAX_RESPONSE_BYTES` (default 5 MiB). The cap
+is enforced before JSON parsing using both declared `Content-Length` and actual bytes read.
 
 ## OpenAPI inventory (planning only)
 

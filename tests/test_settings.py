@@ -40,3 +40,27 @@ def test_clamp_limit(settings):
     assert settings.clamp_limit(0) == 20
     assert settings.clamp_limit(999) == 100
     assert settings.clamp_limit(7) == 7
+
+
+def test_settings_new_security_defaults(monkeypatch):
+    monkeypatch.setenv("MISP_URL", "https://misp.example.test")
+    monkeypatch.setenv("MISP_API_KEY", "secret")
+
+    settings = Settings()
+
+    assert settings.approval_token is None
+    assert settings.max_response_bytes == 5_242_880
+    assert settings.allow_insecure_http_bind is False
+
+
+def test_validation_error_hides_misp_api_key_input(monkeypatch):
+    secret = "do-not-leak-this-key"
+    monkeypatch.setenv("MISP_URL", "https://misp.example.test")
+    monkeypatch.setenv("MISP_API_KEY", secret)
+    monkeypatch.setenv("MISP_TIMEOUT_SECONDS", "0")
+
+    with pytest.raises(ValidationError) as exc_info:
+        Settings()
+
+    assert secret not in str(exc_info.value)
+    assert secret not in repr(exc_info.value.errors(include_url=False))

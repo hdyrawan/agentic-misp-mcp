@@ -130,6 +130,8 @@ async def test_no_shell_filesystem_or_secret_passthrough_tools(settings, tmp_pat
         assert not any(term in lowered_name for term in forbidden_tool_terms), name
 
         for parameter_name in signature(func).parameters:
+            if parameter_name == "approval_token":
+                continue
             lowered_parameter = parameter_name.lower()
             assert not any(term in lowered_parameter for term in forbidden_parameter_terms), (
                 name,

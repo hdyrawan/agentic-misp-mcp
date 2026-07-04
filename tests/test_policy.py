@@ -123,3 +123,36 @@ def test_build_approval_request_sanitizes_secret_material():
 
     assert request.proposed_arguments["headers"] == "[REDACTED]"
     assert request.proposed_arguments["value"] == "1.2.3.4"
+
+
+@pytest.mark.parametrize(
+    "proposed_arguments",
+    [
+        {"payload": {"headers": {"Authorization": "Bearer nested-secret-value"}}},
+        {"nested": {"api_key": "nested-secret-value"}},
+        {"items": [{"token": "nested-secret-value"}]},
+    ],
+)
+def test_approval_request_rejects_nested_secret_material(proposed_arguments):
+    with pytest.raises(ValidationError) as exc_info:
+        ApprovalRequest(
+            tool_name="submit_ioc_with_approval",
+            action=Action.WRITE,
+            role=Role.ANALYST_WRITE,
+            reason="test",
+            proposed_arguments=proposed_arguments,
+        )
+
+    assert "nested-secret-value" not in str(exc_info.value)
+
+
+def test_approval_request_allows_safe_nested_payload():
+    request = ApprovalRequest(
+        tool_name="submit_ioc_with_approval",
+        action=Action.WRITE,
+        role=Role.ANALYST_WRITE,
+        reason="test",
+        proposed_arguments={"payload": {"value": "1.2.3.4", "tags": ["tlp:amber"]}},
+    )
+
+    assert request.proposed_arguments["payload"]["value"] == "1.2.3.4"

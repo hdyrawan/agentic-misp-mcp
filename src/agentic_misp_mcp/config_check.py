@@ -39,6 +39,11 @@ def check_configuration() -> ConfigCheckResult:
         f"OK AGENTIC_MISP_MCP_ROLE={settings.policy_role}",
         f"OK AGENTIC_MISP_MCP_ENABLE_WRITE={str(settings.enable_write).lower()}",
         f"OK AGENTIC_MISP_MCP_REQUIRE_APPROVAL={str(settings.require_approval).lower()}",
+        "OK AGENTIC_MISP_MCP_APPROVAL_TOKEN="
+        f"{'set ([REDACTED])' if settings.approval_token else 'not set'}",
+        f"OK AGENTIC_MISP_MCP_MAX_RESPONSE_BYTES={settings.max_response_bytes}",
+        "OK AGENTIC_MISP_MCP_ALLOW_INSECURE_HTTP_BIND="
+        f"{str(settings.allow_insecure_http_bind).lower()}",
     ]
 
     audit_error = validate_audit_log_path(settings.audit_log_path)
@@ -109,4 +114,10 @@ FIELD_TO_ENV = {
     "AGENTIC_MISP_MCP_ENABLE_WRITE": "AGENTIC_MISP_MCP_ENABLE_WRITE",
     "require_approval": "AGENTIC_MISP_MCP_REQUIRE_APPROVAL",
     "AGENTIC_MISP_MCP_REQUIRE_APPROVAL": "AGENTIC_MISP_MCP_REQUIRE_APPROVAL",
+    "approval_token": "AGENTIC_MISP_MCP_APPROVAL_TOKEN",
+    "AGENTIC_MISP_MCP_APPROVAL_TOKEN": "AGENTIC_MISP_MCP_APPROVAL_TOKEN",
+    "max_response_bytes": "AGENTIC_MISP_MCP_MAX_RESPONSE_BYTES",
+    "AGENTIC_MISP_MCP_MAX_RESPONSE_BYTES": "AGENTIC_MISP_MCP_MAX_RESPONSE_BYTES",
+    "allow_insecure_http_bind": "AGENTIC_MISP_MCP_ALLOW_INSECURE_HTTP_BIND",
+    "AGENTIC_MISP_MCP_ALLOW_INSECURE_HTTP_BIND": "AGENTIC_MISP_MCP_ALLOW_INSECURE_HTTP_BIND",
 }

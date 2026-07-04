@@ -5,7 +5,11 @@ import json
 import httpx
 import pytest
 
-from agentic_misp_mcp.exceptions import MISPAuthenticationError, MISPNotFoundError
+from agentic_misp_mcp.exceptions import (
+    MISPAuthenticationError,
+    MISPNotFoundError,
+    MISPResponseTooLargeError,
+)
 from agentic_misp_mcp.misp.client import MISPClient
 
 
@@ -148,33 +152,6 @@ async def test_not_found_normalized(settings):
 
 
 @pytest.mark.asyncio
-async def test_create_event_sends_payload_and_parses(settings):
-    seen = {}
-
-    async def handler(request: httpx.Request) -> httpx.Response:
-        seen["method"] = request.method
-        seen["path"] = request.url.path
-        seen["body"] = json.loads(request.content)
-        return httpx.Response(
-            200, json={"Event": {"id": "99", "info": "created event", "Attribute": []}}
-        )
-
-    client = MISPClient(settings, transport=httpx.MockTransport(handler))
-    try:
-        event = await client.create_event({"info": "created event", "distribution": 0})
-    finally:
-        await client.aclose()
-
-    assert seen == {
-        "method": "POST",
-        "path": "/events/add",
-        "body": {"info": "created event", "distribution": 0},
-    }
-    assert event.id == 99
-    assert event.info == "created event"
-
-
-@pytest.mark.asyncio
 async def test_add_attribute_sends_payload_and_parses(settings):
     seen = {}
 
@@ -254,3 +231,64 @@ async def test_publish_event_sends_request_and_parses(settings):
 
     assert result.event_id == 42
     assert result.published is True
+
+
+@pytest.mark.asyncio
+async def test_response_size_cap_rejects_large_content_length(settings):
+    async def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, headers={"Content-Length": "2048"}, content=b"{}")
+
+    settings.max_response_bytes = 1024
+    client = MISPClient(settings, transport=httpx.MockTransport(handler))
+    try:
+        with pytest.raises(MISPResponseTooLargeError):
+            await client.search_attributes("1.2.3.4", 20)
+    finally:
+        await client.aclose()
+
+
+@pytest.mark.asyncio
+async def test_response_size_cap_rejects_large_actual_body_without_content_length(settings):
+    async def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, content=b" " * 1025)
+
+    settings.max_response_bytes = 1024
+    client = MISPClient(settings, transport=httpx.MockTransport(handler))
+    try:
+        with pytest.raises(MISPResponseTooLargeError):
+            await client.search_attributes("1.2.3.4", 20)
+    finally:
+        await client.aclose()
+
+
+@pytest.mark.asyncio
+async def test_response_size_cap_rejects_dishonest_small_content_length(settings):
+    async def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            headers={"Content-Length": "2"},
+            content=b" " * 1025,
+        )
+
+    settings.max_response_bytes = 1024
+    client = MISPClient(settings, transport=httpx.MockTransport(handler))
+    try:
+        with pytest.raises(MISPResponseTooLargeError):
+            await client.search_attributes("1.2.3.4", 20)
+    finally:
+        await client.aclose()
+
+
+@pytest.mark.asyncio
+async def test_response_size_cap_allows_normal_response_under_limit(settings):
+    async def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={"response": []})
+
+    settings.max_response_bytes = 1024
+    client = MISPClient(settings, transport=httpx.MockTransport(handler))
+    try:
+        matches = await client.search_attributes("1.2.3.4", 20)
+    finally:
+        await client.aclose()
+
+    assert matches == []

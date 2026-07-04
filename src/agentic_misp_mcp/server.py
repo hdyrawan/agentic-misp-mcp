@@ -27,8 +27,21 @@ def create_server(settings: Settings | None = None):
     return mcp
 
 
+def validate_http_bind_allowed(settings: Settings, host: str) -> None:
+    if host == "0.0.0.0" and not settings.allow_insecure_http_bind:
+        raise StartupConfigurationError(
+            "Refusing to bind unauthenticated HTTP transport to 0.0.0.0. HTTP mode has no "
+            "built-in auth/TLS; use 127.0.0.1 or set "
+            "AGENTIC_MISP_MCP_ALLOW_INSECURE_HTTP_BIND=true only behind an authenticated "
+            "TLS-terminating gateway."
+        )
+
+
 def run_server(transport: str = "stdio", host: str = "127.0.0.1", port: int = 8000) -> None:
-    mcp = create_server()
+    settings = Settings()
+    if transport == "http":
+        validate_http_bind_allowed(settings, host)
+    mcp = create_server(settings)
     if transport == "http":
         # HTTP mode is intentionally minimal/experimental for v0.1. FastMCP transport
         # keyword support can differ by version, so surface a clear runtime error.

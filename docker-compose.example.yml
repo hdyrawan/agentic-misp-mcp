@@ -14,8 +14,9 @@ services:
       - ./logs:/app/logs
     command: ["--transport", "stdio"]
 
-  # Optional experimental HTTP mode. Uncomment only if your MCP client and installed
-  # FastMCP runtime support HTTP transport cleanly.
+  # Optional experimental HTTP mode. Keep loopback-only by default. Binding to 0.0.0.0
+  # requires AGENTIC_MISP_MCP_ALLOW_INSECURE_HTTP_BIND=true and an authenticated
+  # TLS-terminating gateway in front of this service.
   # agentic-misp-mcp-http:
   #   build: .
   #   image: agentic-misp-mcp:local
@@ -25,4 +26,4 @@ services:
   #     - ./logs:/app/logs
   #   ports:
   #     - "8000:8000"
-  #   command: ["--transport", "http", "--host", "0.0.0.0", "--port", "8000"]
+  #   command: ["--transport", "http", "--host", "127.0.0.1", "--port", "8000"]

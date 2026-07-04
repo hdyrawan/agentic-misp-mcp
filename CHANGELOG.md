@@ -7,6 +7,38 @@ live MISP compatibility testing is still pending.
 
 ## Unreleased
 
+### Security hardening before live lab validation
+
+### Added
+
+- Added optional approval-token enforcement via `AGENTIC_MISP_MCP_APPROVAL_TOKEN` for
+  approval-gated write tools. When configured, `approved=true` also requires a matching
+  `approval_token`; missing or incorrect tokens return `blocked`.
+- Added centralized sanitization helpers for audit arguments, safe exception messages, recursive
+  approval-request secret-key validation, and sensitive text redaction.
+- Added `AGENTIC_MISP_MCP_MAX_RESPONSE_BYTES` (default 5 MiB) and bounded MISP response reading
+  before JSON parsing.
+- Added `AGENTIC_MISP_MCP_ALLOW_INSECURE_HTTP_BIND=false` guardrail so experimental HTTP mode
+  refuses `0.0.0.0` by default.
+
+### Changed
+
+- Audit logs and workflow partial-error outputs now use safe, truncated exception summaries rather
+  than raw exception strings.
+- Settings validation uses Pydantic hidden inputs so validation output does not reveal
+  `MISP_API_KEY` values.
+- Removed unused internal `MISPClient.create_event()` dead code; `propose_event` remains
+  proposal-only and no event-submission MCP tool is exposed.
+- Documentation now separates proposal-only tools from approval-gated write tools and clarifies
+  that `approved=true` alone is programmatic gating, not a complete HITL approval mechanism.
+
+### Security
+
+- Kept the 19-tool MCP boundary unchanged: no raw proxy, no shell/filesystem tools, no generic
+  admin/user/org/server-settings tools, and no `submit_event_with_approval`.
+- Kept safe defaults unchanged: read-only role, write disabled, approval required, and TLS
+  verification enabled by default.
+
 ### Phase 10.1 - Review follow-up documentation
 
 ### Added
@@ -110,7 +142,7 @@ live MISP compatibility testing is still pending.
   including blocked and pending-approval outcomes, is audited.
 - Added a dedicated `publish` policy action requiring `curator`/`admin` role, always high-risk
   and approval-gated.
-- Added narrow MISP write methods (`create_event`, `add_attribute`, `add_sighting`, `tag_event`,
+- Added narrow MISP write methods (`add_attribute`, `add_sighting`, `tag_event`,
   `publish_event`) to `misp/client.py`. There is no generic write/request proxy.
 
 ### Changed
