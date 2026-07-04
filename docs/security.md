@@ -30,11 +30,13 @@ workflows run. The runtime policy environment variables are:
 - `AGENTIC_MISP_MCP_ENABLE_WRITE=false` by default. With write mode disabled, all `write` and
   `publish` actions are blocked even for elevated roles, and `admin`/`dangerous` actions remain
   unavailable regardless of this setting (no tool uses those action categories).
-- `AGENTIC_MISP_MCP_REQUIRE_APPROVAL=true` by default. Role-allowed write/publish actions
-  require explicit approval when this is enabled.
-- `AGENTIC_MISP_MCP_APPROVAL_TOKEN` is optional. When configured and approval is required,
-  approved write calls must include the matching `approval_token`; missing or incorrect tokens
-  return `blocked`. The token is redacted from audit logs and returned errors.
+- `AGENTIC_MISP_MCP_REQUIRE_APPROVAL=true` by default. In lab mode, role-allowed write/publish
+  actions require explicit `approved=true` when this is enabled. In production mode,
+  `approval_request_id` is still required even if this is set to `false`.
+- `AGENTIC_MISP_MCP_APPROVAL_TOKEN` is optional lab/shared-secret hardening. When configured in
+  lab mode and approval is required, approved write calls must include the matching
+  `approval_token`; missing or incorrect tokens return `blocked`. The token is redacted from audit
+  logs and returned errors. It is not the production approval mechanism.
 
 The original 13 read tools are classified as `read` and remain allowed under `read_only`.
 
@@ -45,13 +47,15 @@ The original 13 read tools are classified as `read` and remain allowed under `re
   and whether approval would be required, plus a `blocked` status if the current
   role/write-mode does not even allow proposing the write.
 - `submit_ioc_with_approval`, `add_sighting_with_approval`, `tag_event_with_approval`, and
-  `publish_event_with_approval` each accept an `approved: bool = False` argument (explicit
-  approval input) and optional `approval_token`. Each call returns one of:
+  `publish_event_with_approval` each accept `approved: bool = False`, optional `approval_token`
+  for lab mode, and optional `approval_request_id` for production mode. Each call returns one of:
   - `blocked` — write mode disabled, or role does not permit the action. No MISP call is made.
   - `pending_approval` — role permits the action but approval is required and `approved` was
     not set. Returns a sanitized `ApprovalRequest` proposal. No MISP call is made.
-  - `executed` — role permits the action and (approval not required, or `approved=True` was
-    explicitly passed, plus a matching `approval_token` when token enforcement is configured).
+  - `executed` — role permits the action and approval has passed for the active mode. In lab mode
+    this means approval is not required, or `approved=True` was explicitly passed plus a matching
+    `approval_token` when token enforcement is configured. In production mode this requires a
+    valid, CLI-approved, one-time-use `approval_request_id`; `approved=true` alone is never enough.
     The corresponding MISP write method is called in this branch and MISP confirmed the write
     (e.g. `saved`/`published` was true in MISP's response).
   - `failed` — same conditions as `executed` (the MISP write method was called, no exception was
@@ -184,8 +188,10 @@ MISP warninglist endpoint behavior can vary between deployments and versions. Th
 
 ## Production approval mode security notes
 
-`AGENTIC_MISP_MCP_APPROVAL_MODE=production` adds persisted, one-time-use, exact-payload-bound approval for `submit_ioc_with_approval`, `add_sighting_with_approval`, `tag_event_with_approval`, and `publish_event_with_approval` only. It does not add raw proxy behavior, new write endpoints, or admin tools.
+`AGENTIC_MISP_MCP_APPROVAL_MODE=production` adds persisted, one-time-use, exact-operation-hash-bound approval for `submit_ioc_with_approval`, `add_sighting_with_approval`, `tag_event_with_approval`, and `publish_event_with_approval` only. It does not add raw proxy behavior, new write endpoints, admin tools, or approval-administration MCP tools. Lab mode remains the default; `AGENTIC_MISP_MCP_APPROVAL_TOKEN` is only a lab/shared-secret control for the legacy `approved=true` flow.
 
-The approval store uses SQLite. The server and CLI hard-fail if the approval database or its parent directory is group/world writable. This protects the approval state only when the LLM/MCP caller cannot run the operator CLI and cannot write to the approval database. If the agent has shell access as the operator user or write access to the database, production approval mode does not provide a meaningful human boundary.
+In production mode, `approved=true` alone never executes a write, including when `AGENTIC_MISP_MCP_REQUIRE_APPROVAL=false`. A valid `approval_request_id` approved through the operator CLI is required, and the approval is TTL-bound, one-time-use, and bound to the exact canonical operation hash. The store marks an approved record `used` before the MISP write call; if MISP later fails or rejects the write, the approval remains consumed and the operator must approve a new request for retry.
+
+The approval store uses SQLite. The server and CLI hard-fail if the approval database or its parent directory is group/world writable. This protects the approval state only when the LLM/MCP caller cannot run the operator CLI and cannot write to the approval database. If the agent has shell access as the operator user or write access to the database, production approval mode does not provide a meaningful human boundary. Combine it with MISP-side RBAC/scoped API keys plus guardrails: `AGENTIC_MISP_MCP_ALLOWED_ATTRIBUTE_TYPES`, `AGENTIC_MISP_MCP_ALLOWED_ATTRIBUTE_CATEGORIES`, `AGENTIC_MISP_MCP_ALLOWED_TAGS`, and `AGENTIC_MISP_MCP_ENABLE_PUBLISH`.
 
 Audit outcome values remain `success`, `blocked`, `failed`, and `error`; approval details are additive fields (`approval_request_id`, `operation_hash`, `approval_status`).

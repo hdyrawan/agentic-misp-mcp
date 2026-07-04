@@ -11,9 +11,13 @@ It does not add new MISP write capabilities, raw proxy behavior, admin tools, or
 
 ## Modes
 
-`AGENTIC_MISP_MCP_APPROVAL_MODE=lab` remains the default for backward compatibility. In lab mode the existing `approved=true` flow and optional `AGENTIC_MISP_MCP_APPROVAL_TOKEN` behavior are preserved.
+### Lab approval mode
 
-`AGENTIC_MISP_MCP_APPROVAL_MODE=production` opts into persisted approval requests. In production mode, `approved=true` alone never executes a write. Execution requires an `approval_request_id` that references a persisted record approved by the operator CLI.
+`AGENTIC_MISP_MCP_APPROVAL_MODE=lab` remains the default for backward compatibility. In lab mode the existing `approved=true` flow is preserved. `AGENTIC_MISP_MCP_APPROVAL_TOKEN`, when configured, is only a lab/shared-secret hardening control for that flow; it is not the production approval mechanism. Lab mode is useful for local demos and controlled non-production validation, but `approved=true` alone should not be treated as production-safe human approval.
+
+### Production approval mode
+
+`AGENTIC_MISP_MCP_APPROVAL_MODE=production` opts into persisted approval requests. In production mode, `approved=true` alone never executes a write, even when `AGENTIC_MISP_MCP_REQUIRE_APPROVAL=false`. Execution requires an `approval_request_id` that references a persisted record approved by the operator CLI. That record is one-time-use, expires after `AGENTIC_MISP_MCP_APPROVAL_TTL_SECONDS`, and is bound to the exact canonical operation hash for the same tool and business arguments.
 
 ## Production approval lifecycle
 
@@ -24,7 +28,7 @@ It does not add new MISP write capabilities, raw proxy behavior, admin tools, or
 5. The MCP caller retries the same tool with the same business arguments and the approved `approval_request_id`.
 6. The store atomically redeems the record using `UPDATE ... WHERE status='approved' AND operation_hash=?` semantics and marks it `used` before the MISP write is attempted.
 
-Approval records are one-time-use and expire after `AGENTIC_MISP_MCP_APPROVAL_TTL_SECONDS`. Rejected, expired, already used, wrong-tool, and hash-mismatch redemptions are blocked and do not call MISP.
+Approval records are one-time-use and expire after `AGENTIC_MISP_MCP_APPROVAL_TTL_SECONDS`. Rejected, expired, already used, wrong-tool, and hash-mismatch redemptions are blocked and do not call MISP. If redemption succeeds but the subsequent MISP write fails or is rejected by MISP, the approval is already consumed (`used`). This is intentional replay-safe behavior: retrying requires the operator to review and approve a new request.
 
 ## Operator CLI
 
@@ -52,10 +56,11 @@ Optional defense-in-depth allowlists:
 
 ```env
 AGENTIC_MISP_MCP_ALLOWED_ATTRIBUTE_TYPES=ip-dst,ip-src,url,domain
+AGENTIC_MISP_MCP_ALLOWED_ATTRIBUTE_CATEGORIES=Network activity,Payload delivery
 AGENTIC_MISP_MCP_ALLOWED_TAGS=tlp:*,misp-galaxy:*
 ```
 
-`AGENTIC_MISP_MCP_ENABLE_PUBLISH=false` is the default. Publishing requires both `AGENTIC_MISP_MCP_ENABLE_PUBLISH=true` and a `curator` or `admin` role, plus approval.
+Production guardrails are deliberately layered: `AGENTIC_MISP_MCP_ALLOWED_ATTRIBUTE_TYPES` limits submitted attribute types, `AGENTIC_MISP_MCP_ALLOWED_ATTRIBUTE_CATEGORIES` limits submitted attribute categories, and `AGENTIC_MISP_MCP_ALLOWED_TAGS` limits tags accepted by `tag_event_with_approval` (entries ending in `*` act as prefixes). `AGENTIC_MISP_MCP_ENABLE_PUBLISH=false` is the default publish kill switch. Publishing requires `AGENTIC_MISP_MCP_ENABLE_PUBLISH=true`, a `curator` or `admin` role, and production approval.
 
 ## Approval store permissions
 

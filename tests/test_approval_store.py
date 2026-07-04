@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 
 import pytest
@@ -139,6 +140,43 @@ def test_sqlite_store_redeem_is_one_time_and_persists(tmp_path):
             operation_hash="hash-1",
         )
     assert exc_info.value.status is ApprovalStatus.ALREADY_USED
+
+
+def test_sqlite_store_concurrent_redeem_only_one_succeeds(tmp_path):
+    path = tmp_path / "approvals.sqlite3"
+    store = SqliteApprovalStore(path)
+    record = store.create(
+        tool_name="submit_ioc_with_approval",
+        operation_hash="hash-1",
+        proposed_arguments={"value": "1.2.3.4"},
+        role="analyst_write",
+        ttl_seconds=900,
+    )
+    store.approve(record.request_id, approved_by="operator")
+
+    def redeem_once():
+        try:
+            return (
+                SqliteApprovalStore(path)
+                .redeem(
+                    record.request_id,
+                    tool_name="submit_ioc_with_approval",
+                    operation_hash="hash-1",
+                )
+                .status
+            )
+        except ApprovalRedemptionError as exc:
+            return exc.status
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        results = list(executor.map(lambda _: redeem_once(), range(2)))
+
+    final_record = SqliteApprovalStore(path).get(record.request_id)
+
+    assert results.count(ApprovalStatus.USED) == 1
+    assert results.count(ApprovalStatus.ALREADY_USED) == 1
+    assert final_record is not None
+    assert final_record.status is ApprovalStatus.USED
 
 
 def test_sqlite_store_refuses_group_world_writable_parent_or_db(tmp_path):

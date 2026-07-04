@@ -206,11 +206,13 @@ This project is workflow-first, not endpoint-first.
 - No shell execution or unrestricted filesystem tools.
 - Every MCP tool call is audited with sanitized arguments and policy decision fields.
 
-Important approval limitation: `approved=true` is a programmatic gate, not a complete
-human-in-the-loop approval mechanism by itself. Real HITL approval requires an external
-orchestrator that only submits approved calls after a human decision, or approval-token
-enforcement with `AGENTIC_MISP_MCP_APPROVAL_TOKEN`. For autonomous agents, configure an approval
-token so the calling agent cannot self-approve writes merely by setting `approved=true`.
+Important approval limitation: lab approval mode and production approval mode are different. In
+`AGENTIC_MISP_MCP_APPROVAL_MODE=lab` (the default), `approved=true` is only a programmatic lab gate;
+`AGENTIC_MISP_MCP_APPROVAL_TOKEN` is an optional shared-secret control for that lab flow and is not
+the production approval mechanism. In `AGENTIC_MISP_MCP_APPROVAL_MODE=production`, `approved=true`
+alone never executes a write. Production execution requires a persisted `approval_request_id` that
+was approved out of band with the operator CLI, is one-time-use, TTL-bound, and exact
+operation-hash-bound.
 
 ## Current MCP tools
 
@@ -247,10 +249,10 @@ These tools build reviewable payloads only. They are policy-gated, but they neve
 
 These tools are blocked unless write mode and role allow the action; write execution also requires explicit approval by default.
 
-- `submit_ioc_with_approval(..., approved=False, approval_token=None)` — add an attribute only when policy and approval allow.
-- `add_sighting_with_approval(..., approved=False, approval_token=None)` — add a sighting only when policy and approval allow.
-- `tag_event_with_approval(event_id, tag, approved=False, approval_token=None)` — tag an event only when policy and approval allow.
-- `publish_event_with_approval(event_id, approved=False, approval_token=None)` — publish an event only for curator/admin roles and approval.
+- `submit_ioc_with_approval(..., approved=False, approval_token=None, approval_request_id=None)` — add an attribute only when policy and approval allow.
+- `add_sighting_with_approval(..., approved=False, approval_token=None, approval_request_id=None)` — add a sighting only when policy and approval allow.
+- `tag_event_with_approval(event_id, tag, approved=False, approval_token=None, approval_request_id=None)` — tag an event only when policy and approval allow.
+- `publish_event_with_approval(event_id, approved=False, approval_token=None, approval_request_id=None)` — publish an event only for curator/admin roles and approval.
 
 Write-tool results are explicit: `blocked`, `pending_approval`, or `executed`. There are no silent writes.
 
@@ -379,8 +381,15 @@ anything but an isolated lab.
 | `AGENTIC_MISP_MCP_LOG_LEVEL` | No | `INFO` | Application log level. |
 | `AGENTIC_MISP_MCP_ROLE` | No | `read_only` | `read_only`, `analyst_write`, `curator`, or `admin`. |
 | `AGENTIC_MISP_MCP_ENABLE_WRITE` | No | `false` | Global write-mode gate. |
-| `AGENTIC_MISP_MCP_REQUIRE_APPROVAL` | No | `true` | Require explicit `approved=true` for write execution. |
-| `AGENTIC_MISP_MCP_APPROVAL_TOKEN` | No | unset | Optional approval-token hardening. When set, approved write calls must include the matching `approval_token`; audit logs redact it. |
+| `AGENTIC_MISP_MCP_REQUIRE_APPROVAL` | No | `true` | Lab-mode gate requiring explicit `approved=true`; production mode still requires `approval_request_id` even if this is `false`. |
+| `AGENTIC_MISP_MCP_APPROVAL_TOKEN` | No | unset | Optional lab/shared-secret hardening. When set in lab mode, approved write calls must include the matching `approval_token`; audit logs redact it. Not the production approval mechanism. |
+| `AGENTIC_MISP_MCP_APPROVAL_MODE` | No | `lab` | `lab` preserves the legacy `approved=true` flow; `production` requires persisted operator-approved request IDs. |
+| `AGENTIC_MISP_MCP_APPROVAL_STORE_PATH` | No | `./approvals.sqlite3` | SQLite store for production approval records; the agent must not have write access to it. |
+| `AGENTIC_MISP_MCP_APPROVAL_TTL_SECONDS` | No | `900` | Production approval lifetime before pending/approved records expire. |
+| `AGENTIC_MISP_MCP_ALLOWED_ATTRIBUTE_TYPES` | No | unset | Optional production guardrail for submitted attribute types. |
+| `AGENTIC_MISP_MCP_ALLOWED_ATTRIBUTE_CATEGORIES` | No | unset | Optional production guardrail for submitted attribute categories. |
+| `AGENTIC_MISP_MCP_ALLOWED_TAGS` | No | unset | Optional production guardrail for event tags; entries ending in `*` act as prefixes. |
+| `AGENTIC_MISP_MCP_ENABLE_PUBLISH` | No | `false` | Dedicated publish kill switch; production publish also requires curator/admin role and approval. |
 | `AGENTIC_MISP_MCP_MAX_RESPONSE_BYTES` | No | `5242880` | Maximum MISP HTTP response body size, enforced before JSON parsing. |
 | `AGENTIC_MISP_MCP_ALLOW_INSECURE_HTTP_BIND` | No | `false` | Allows experimental HTTP transport to bind `0.0.0.0`; keep false unless behind authenticated TLS termination. |
 
@@ -551,6 +560,6 @@ Commits should be attributed to their human author only — do not add AI co-aut
 
 The default approval mode remains `AGENTIC_MISP_MCP_APPROVAL_MODE=lab`, preserving the existing `approved=true` lab flow. A new opt-in `production` mode adds persisted SQLite approvals for the four existing write-executing tools only: `submit_ioc_with_approval`, `add_sighting_with_approval`, `tag_event_with_approval`, and `publish_event_with_approval`. No new MISP endpoints, raw proxy behavior, or admin tools are exposed.
 
-In production mode, `approved=true` alone is blocked. Execution requires an operator-approved, one-time-use `approval_request_id` bound to the exact canonical operation hash. Approval administration is CLI-only via `agentic-misp-mcp approvals ...`; no MCP tool can approve or reject. Publishing is disabled by default with `AGENTIC_MISP_MCP_ENABLE_PUBLISH=false`.
+In production mode, `approved=true` alone is blocked, even if `AGENTIC_MISP_MCP_REQUIRE_APPROVAL=false`. Execution requires an operator-approved `approval_request_id` from `agentic-misp-mcp approvals ...`; no MCP tool can approve or reject. Each production approval is one-time-use, TTL-bound by `AGENTIC_MISP_MCP_APPROVAL_TTL_SECONDS`, and bound to the exact canonical operation hash. The LLM/agent must not have shell access to the approval CLI or write access to the SQLite approval database. If redemption succeeds but the later MISP write fails, the approval remains consumed; the operator must approve a new request for any retry. Publishing is disabled by default with `AGENTIC_MISP_MCP_ENABLE_PUBLISH=false`; additional production guardrails include `AGENTIC_MISP_MCP_ALLOWED_ATTRIBUTE_TYPES`, `AGENTIC_MISP_MCP_ALLOWED_ATTRIBUTE_CATEGORIES`, and `AGENTIC_MISP_MCP_ALLOWED_TAGS`.
 
 See `docs/production-write.md` for the full beta deployment guidance and approval-store permission requirements.

@@ -248,3 +248,12 @@ When editing this repository:
 ## v0.2.0-beta.1 production-write beta
 
 Production approval mode is opt-in via `AGENTIC_MISP_MCP_APPROVAL_MODE=production`. It applies only to the four existing write-executing approval tools and requires `approval_request_id` redemption against SQLite state approved by the operator CLI. Do not add MCP approval/admin tools. Do not add new MISP write capabilities. `approved=true` alone must not execute in production mode. Lab mode remains the default.
+
+
+## Production approval mode (`v0.2.0-beta.1`)
+
+- Lab mode (`AGENTIC_MISP_MCP_APPROVAL_MODE=lab`) is the default. `approved=true` is a lab programmatic gate; `AGENTIC_MISP_MCP_APPROVAL_TOKEN` is only optional lab/shared-secret hardening.
+- Production mode requires `AGENTIC_MISP_MCP_APPROVAL_MODE=production`; `approved=true` alone never executes writes, even if `AGENTIC_MISP_MCP_REQUIRE_APPROVAL=false`.
+- Production writes require an operator-approved `approval_request_id` created in SQLite and approved via `agentic-misp-mcp approvals ...`; approvals are one-time-use, TTL-bound, and exact operation-hash-bound.
+- The LLM/agent must not have shell access to the approval CLI or write access to the approval database. If redemption succeeds but MISP later fails, the approval is consumed and retry needs a new operator approval.
+- Guardrails include `AGENTIC_MISP_MCP_ALLOWED_ATTRIBUTE_TYPES`, `AGENTIC_MISP_MCP_ALLOWED_ATTRIBUTE_CATEGORIES`, `AGENTIC_MISP_MCP_ALLOWED_TAGS`, and `AGENTIC_MISP_MCP_ENABLE_PUBLISH`.

@@ -441,6 +441,30 @@ async def test_publish_disabled_by_default_even_for_curator(monkeypatch, tmp_pat
 
 
 @pytest.mark.asyncio
+async def test_production_mode_requires_request_id_even_when_approval_requirement_disabled(
+    monkeypatch, tmp_path
+):
+    client = FakeWriteClient()
+    mcp, _, _ = _register(
+        monkeypatch,
+        tmp_path,
+        client=client,
+        AGENTIC_MISP_MCP_ROLE="analyst_write",
+        AGENTIC_MISP_MCP_ENABLE_WRITE="true",
+        AGENTIC_MISP_MCP_REQUIRE_APPROVAL="false",
+        AGENTIC_MISP_MCP_APPROVAL_MODE="production",
+        AGENTIC_MISP_MCP_APPROVAL_STORE_PATH=str(tmp_path / "approvals.sqlite3"),
+    )
+
+    result = await mcp.tools["submit_ioc_with_approval"](1, "ip-dst", "1.2.3.4", approved=True)
+
+    assert result["status"] == "blocked"
+    assert result["approval_status"] == "not_found"
+    assert "approval_request_id" in result["policy"]["reason"]
+    assert client.calls == []
+
+
+@pytest.mark.asyncio
 async def test_production_mode_requires_approved_request_id_and_blocks_replay(
     monkeypatch, tmp_path
 ):
