@@ -180,3 +180,12 @@ deliberately rewritten on 2026-07-04 to remove such trailers already present fro
 ## Warninglist behavior
 
 MISP warninglist endpoint behavior can vary between deployments and versions. This project isolates this logic in `misp/warninglists.py`. If the warninglist check is unavailable or the response shape is not recognized, the tool returns a structured `not_available` state rather than pretending the check succeeded.
+
+
+## Production approval mode security notes
+
+`AGENTIC_MISP_MCP_APPROVAL_MODE=production` adds persisted, one-time-use, exact-payload-bound approval for `submit_ioc_with_approval`, `add_sighting_with_approval`, `tag_event_with_approval`, and `publish_event_with_approval` only. It does not add raw proxy behavior, new write endpoints, or admin tools.
+
+The approval store uses SQLite. The server and CLI hard-fail if the approval database or its parent directory is group/world writable. This protects the approval state only when the LLM/MCP caller cannot run the operator CLI and cannot write to the approval database. If the agent has shell access as the operator user or write access to the database, production approval mode does not provide a meaningful human boundary.
+
+Audit outcome values remain `success`, `blocked`, `failed`, and `error`; approval details are additive fields (`approval_request_id`, `operation_hash`, `approval_status`).

@@ -8,6 +8,14 @@ testing is still pending.
 
 ## Unreleased
 
+### v0.2.0-beta.1 production-write approval beta
+
+- Added opt-in `AGENTIC_MISP_MCP_APPROVAL_MODE=production` for the four existing write-executing approval tools only. Lab mode remains the default.
+- Added SQLite approval persistence, one-time-use redemption, TTL expiry, exact canonical operation hashes, replay/payload-swap/wrong-tool blocking, and CLI-only approval administration.
+- Added `AGENTIC_MISP_MCP_ENABLE_PUBLISH=false` default publish kill switch plus optional attribute type and tag allowlists.
+- Added approval correlation audit fields without changing top-level outcome values.
+- Added `docs/production-write.md` and `.env.production-write.example`; this remains a beta, not GA production certification.
+
 ### Production readiness baseline (2026-07-04)
 
 - Added `docs/production-readiness.md`: scope, the read-only-first production target,

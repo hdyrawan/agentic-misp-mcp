@@ -265,3 +265,21 @@ Only this second call invokes `MISPClient.publish_event`.
 - Treat `publish_event_with_approval` with extra caution: it is the only `high`-risk tool and
   the only one requiring `curator`/`admin`.
 - Expect — and check — an audit log entry for every call, including `blocked` ones.
+
+
+## Production approval mode (`v0.2.0-beta.1`)
+
+The lab flow above remains the default under `AGENTIC_MISP_MCP_APPROVAL_MODE=lab`. Production pilots must explicitly set `AGENTIC_MISP_MCP_APPROVAL_MODE=production`. In production mode, `approved=true` alone is blocked and never executes a MISP write. The caller must provide `approval_request_id` for execution.
+
+A first production-mode call without `approval_request_id` creates a pending SQLite approval record and returns `approval_request_id`, `operation_hash`, and `approval_status: pending`. The operation hash is computed from the canonical business operation object (`tool` plus normalized arguments), not audit-sanitized data and not timestamp/request metadata.
+
+Only the operator CLI can approve or reject records:
+
+```bash
+agentic-misp-mcp approvals list --status pending
+agentic-misp-mcp approvals show <request_id>
+agentic-misp-mcp approvals approve <request_id> --approved-by NAME
+agentic-misp-mcp approvals reject <request_id> --reason "..."
+```
+
+On redemption, the store atomically marks an approved matching record as `used`. Wrong tool, changed payload (`hash_mismatch`), replay (`already_used`), rejected, expired, pending, and unknown approvals return `blocked` and do not call MISP. See `docs/production-write.md` for deployment and permission requirements.

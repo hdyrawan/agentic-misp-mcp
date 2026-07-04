@@ -545,3 +545,12 @@ Two real bugs surfaced during that pass and are now fixed:
 Contributions are welcome, but keep the project boundary intact: no raw API proxy, no secret passthrough, no unaudited tool path, and no write behavior without policy and approval gates. Start by reading `PROJECT_STATE.md`, `docs/security.md`, and `src/agentic_misp_mcp/tools/registry.py`.
 
 Commits should be attributed to their human author only — do not add AI co-author trailers (for example `Co-Authored-By: <AI assistant>`) to commits in this repository, regardless of what tooling was used to help write them.
+
+
+### v0.2.0-beta.1 production-write approval mode
+
+The default approval mode remains `AGENTIC_MISP_MCP_APPROVAL_MODE=lab`, preserving the existing `approved=true` lab flow. A new opt-in `production` mode adds persisted SQLite approvals for the four existing write-executing tools only: `submit_ioc_with_approval`, `add_sighting_with_approval`, `tag_event_with_approval`, and `publish_event_with_approval`. No new MISP endpoints, raw proxy behavior, or admin tools are exposed.
+
+In production mode, `approved=true` alone is blocked. Execution requires an operator-approved, one-time-use `approval_request_id` bound to the exact canonical operation hash. Approval administration is CLI-only via `agentic-misp-mcp approvals ...`; no MCP tool can approve or reject. Publishing is disabled by default with `AGENTIC_MISP_MCP_ENABLE_PUBLISH=false`.
+
+See `docs/production-write.md` for the full beta deployment guidance and approval-store permission requirements.

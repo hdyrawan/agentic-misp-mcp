@@ -243,3 +243,8 @@ When editing this repository:
 - Show diffs before committing.
 - Do not claim production readiness anywhere in docs. See production-readiness.md for the
   current scope and acceptance criteria before making any production-status claim.
+
+
+## v0.2.0-beta.1 production-write beta
+
+Production approval mode is opt-in via `AGENTIC_MISP_MCP_APPROVAL_MODE=production`. It applies only to the four existing write-executing approval tools and requires `approval_request_id` redemption against SQLite state approved by the operator CLI. Do not add MCP approval/admin tools. Do not add new MISP write capabilities. `approved=true` alone must not execute in production mode. Lab mode remains the default.
