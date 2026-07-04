@@ -151,9 +151,14 @@ def classify_tags(tags: list[str]) -> dict[str, list[str]]:
     }
 
 
-def extract_related_iocs(
-    *, primary_ioc: str, related_events: list[dict[str, Any]], max_iocs: int = 25
+def collect_related_ioc_candidates(
+    *, primary_ioc: str, related_events: list[dict[str, Any]]
 ) -> list[dict[str, Any]]:
+    """Collect high-value IOCs co-occurring with the primary IOC's related events.
+
+    Returns unsorted, uncapped candidates so callers can apply their own ranking
+    (see `extract_related_iocs` below and `workflows/pivoting.py`).
+    """
     primary = primary_ioc.lower()
     collected: dict[tuple[str, str], dict[str, Any]] = {}
     for event in related_events:
@@ -188,9 +193,17 @@ def extract_related_iocs(
             for tag in attribute.get("tags") or []:
                 if tag not in item["tags"]:
                     item["tags"].append(tag)
+    return list(collected.values())
 
+
+def extract_related_iocs(
+    *, primary_ioc: str, related_events: list[dict[str, Any]], max_iocs: int = 25
+) -> list[dict[str, Any]]:
+    candidates = collect_related_ioc_candidates(
+        primary_ioc=primary_ioc, related_events=related_events
+    )
     related = sorted(
-        collected.values(),
+        candidates,
         key=lambda item: (-len(item["event_ids"]), item["type"], item["value"]),
     )
     return related[:max_iocs]

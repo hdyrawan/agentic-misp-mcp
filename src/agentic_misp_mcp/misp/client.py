@@ -10,7 +10,11 @@ from agentic_misp_mcp.exceptions import (
     MISPNotFoundError,
     MISPRateLimitError,
 )
-from agentic_misp_mcp.misp.queries import attribute_search_payload, warninglist_check_payload
+from agentic_misp_mcp.misp.queries import (
+    attribute_search_payload,
+    event_tag_search_payload,
+    warninglist_check_payload,
+)
 from agentic_misp_mcp.misp.warninglists import (
     WarninglistCheckResult,
     parse_warninglist_response,
@@ -88,6 +92,34 @@ class MISPClient:
         if not isinstance(raw, dict):
             raise MISPClientError("MISP event response was not an object")
         return parse_event(raw, attribute_limit=attribute_limit)
+
+    async def search_events_by_tag(self, tag: str, limit: int) -> list[MISPEventSummary]:
+        raw = await self._request(
+            "POST", "/events/restSearch", json=event_tag_search_payload(tag, limit)
+        )
+        records: list[Any]
+        if isinstance(raw, dict):
+            response = raw.get("response", raw)
+            if isinstance(response, dict):
+                records = response.get("Event") or response.get("events") or []
+            elif isinstance(response, list):
+                records = response
+            else:
+                records = []
+        elif isinstance(raw, list):
+            records = raw
+        else:
+            records = []
+
+        events: list[MISPEventSummary] = []
+        for item in records[:limit]:
+            if not isinstance(item, dict):
+                continue
+            try:
+                events.append(parse_event(item, attribute_limit=0))
+            except ValueError:
+                continue
+        return events
 
     async def check_warninglists(self, value: str) -> WarninglistCheckResult:
         # The exact endpoint/shape varies by MISP version. Keep isolated and return

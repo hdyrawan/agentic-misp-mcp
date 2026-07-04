@@ -14,3 +14,11 @@ def attribute_search_payload(value: str, limit: int) -> dict[str, object]:
 
 def warninglist_check_payload(value: str) -> dict[str, object]:
     return {"value": value}
+
+
+def event_tag_search_payload(tag: str, limit: int) -> dict[str, object]:
+    return {
+        "returnFormat": "json",
+        "tags": [tag],
+        "limit": limit,
+    }
