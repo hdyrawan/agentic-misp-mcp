@@ -12,6 +12,7 @@ class PolicyEngine:
     role: Role = Role.READ_ONLY
     enable_write: bool = False
     require_approval: bool = True
+    enable_publish: bool = False
 
     @classmethod
     def from_settings(cls, settings: object) -> PolicyEngine:
@@ -19,6 +20,7 @@ class PolicyEngine:
             role=Role(str(getattr(settings, "policy_role", Role.READ_ONLY.value))),
             enable_write=bool(getattr(settings, "enable_write", False)),
             require_approval=bool(getattr(settings, "require_approval", True)),
+            enable_publish=bool(getattr(settings, "enable_publish", False)),
         )
 
     def decide(self, *, tool_name: str, action: Action | str) -> PolicyDecision:
@@ -68,14 +70,17 @@ class PolicyEngine:
             )
 
         if action_value is Action.PUBLISH:
-            allowed = self.role in {Role.CURATOR, Role.ADMIN}
+            role_allowed = self.role in {Role.CURATOR, Role.ADMIN}
+            allowed = role_allowed and self.enable_publish
             return self._decision(
                 tool_name=tool_name,
                 action=action_value,
                 allowed=allowed,
                 approval_required=allowed and self.require_approval,
                 reason=(
-                    "publish action allowed by curator/admin role and requires approval"
+                    "publish action is disabled by AGENTIC_MISP_MCP_ENABLE_PUBLISH"
+                    if role_allowed and not self.enable_publish
+                    else "publish action allowed by curator/admin role and requires approval"
                     if allowed and self.require_approval
                     else "publish action allowed by curator/admin role"
                     if allowed
