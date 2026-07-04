@@ -2,10 +2,29 @@
 
 All notable changes to this project will be documented in this file.
 
-This project is in **early development**. It has been tested with mocked MISP responses only;
-live MISP compatibility testing is still pending.
+This project is in **early development**. It has mocked test coverage plus live-lab validation
+(read-only and controlled-write) against MISP `2.5.42`; broader MISP version compatibility
+testing is still pending.
 
 ## Unreleased
+
+### README rewrite and security-doc corrections (2026-07-04, follow-up)
+
+- Rewrote the README's "Quick start" section: it previously buried a single Docker-only
+  walkthrough (build image → env file → audit-log dir → connectivity test → MCP Inspector → SSH
+  tunnel) behind a wall of validation-specific steps, with no local (non-Docker) path at all. It
+  is now two short, parallel paths — **Option A: local install** (`pip`/`uv`) and **Option B:
+  Docker** — each with install → configure → validate → run → MCP client config, plus a shared
+  "Verify it's working" step. The deeper validation walkthrough (MCP Inspector, SSH tunneling,
+  read-only test checklist) moved to a renamed "Testing against a live MISP lab (optional)"
+  section further down, deduplicated against the new Quick start.
+- Corrected `docs/security.md`'s stale opening claim ("has not been validated against a live MISP
+  instance") — it has, for both read-only and controlled-write tools; only broader MISP version
+  compatibility remains pending. Also corrected the CHANGELOG's own top-of-file disclaimer to the
+  same effect.
+- Documented the project's commit-provenance policy explicitly in `docs/security.md` and the
+  README's "Contributing" section: commits must not carry an AI co-author trailer, regardless of
+  what tooling assisted in writing them.
 
 ### Controlled-write live validation and fixes (2026-07-04, follow-up)
 

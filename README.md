@@ -20,6 +20,142 @@ It exists because agents should not need unrestricted MISP API access to help wi
 - Requires Python 3.11+.
 - License: MIT.
 
+## Quick start
+
+There are two ways to run `agentic-misp-mcp`: **local** (Python/`uv`, no Docker needed) or
+**Docker**. Pick one — both end up in the same place, an MCP server your client can talk to.
+
+### Prerequisites
+
+- A MISP instance you can reach, and an API key for it (`MISP_URL`, `MISP_API_KEY`).
+- Python 3.11+ for the local path, **or** Docker for the Docker path.
+- An MCP client to actually use it (Claude Desktop, Claude Code, MCP Inspector, etc.).
+
+### Option A — Local install (Python / `uv`)
+
+1. **Install:**
+
+   ```bash
+   pip install -e ".[dev]"
+   # or, with uv:
+   uv sync --extra dev
+   ```
+
+2. **Configure your MISP connection:**
+
+   ```bash
+   cp .env.example .env
+   # edit .env — at minimum set MISP_URL and MISP_API_KEY
+   ```
+
+3. **Validate configuration** (no MISP connection is made; the API key is redacted):
+
+   ```bash
+   agentic-misp-mcp config-check
+   # or: uv run agentic-misp-mcp config-check
+   ```
+
+4. **Run the server** over stdio (the primary supported transport):
+
+   ```bash
+   agentic-misp-mcp --transport stdio
+   # or: uv run agentic-misp-mcp --transport stdio
+   ```
+
+5. **Point your MCP client at it.** Example config (works from any working directory, since `uv
+   --directory` targets the repo explicitly):
+
+   ```json
+   {
+     "mcpServers": {
+       "agentic-misp-mcp": {
+         "command": "uv",
+         "args": [
+           "--directory", "/path/to/agentic-misp-mcp",
+           "run", "agentic-misp-mcp", "--transport", "stdio"
+         ],
+         "env": {
+           "MISP_URL": "https://misp.example.local",
+           "MISP_API_KEY": "your_misp_api_key_here"
+         }
+       }
+     }
+   }
+   ```
+
+   If you installed with `pip` into an environment already on your `PATH`, you can use
+   `"command": "agentic-misp-mcp"` with `"args": ["--transport", "stdio"]` instead of the `uv`
+   wrapper.
+
+### Option B — Docker
+
+1. **Build the image:**
+
+   ```bash
+   git clone https://github.com/hdyrawan/agentic-misp-mcp.git
+   cd agentic-misp-mcp
+   docker build -t agentic-misp-mcp:local .
+   ```
+
+2. **Create an env file outside the repository** (never commit real credentials) and a directory
+   for audit logs:
+
+   ```bash
+   mkdir -p ~/.config/agentic-misp-mcp
+   cp .env.example ~/.config/agentic-misp-mcp/.env
+   # edit ~/.config/agentic-misp-mcp/.env — at minimum set MISP_URL and MISP_API_KEY
+   mkdir -p ~/.local/state/agentic-misp-mcp/logs
+   ```
+
+   (Prefer Compose? `docker-compose.example.yml` does the same thing — see
+   [`docs/configuration.md`](docs/configuration.md#docker-compose).)
+
+3. **Validate configuration:**
+
+   ```bash
+   docker run --rm \
+     --env-file ~/.config/agentic-misp-mcp/.env \
+     -v ~/.local/state/agentic-misp-mcp/logs:/app/logs \
+     agentic-misp-mcp:local config-check
+   ```
+
+4. **Run the server** over stdio:
+
+   ```bash
+   docker run --rm -i \
+     --env-file ~/.config/agentic-misp-mcp/.env \
+     -v ~/.local/state/agentic-misp-mcp/logs:/app/logs \
+     agentic-misp-mcp:local --transport stdio
+   ```
+
+5. **Point your MCP client at it** (assumes your client can spawn `docker` on the same host — for
+   a remote/headless Docker host, run the client there too, or see the SSH-tunnel note below):
+
+   ```json
+   {
+     "mcpServers": {
+       "agentic-misp-mcp": {
+         "command": "docker",
+         "args": [
+           "run", "--rm", "-i",
+           "--env-file", "/home/you/.config/agentic-misp-mcp/.env",
+           "-v", "/home/you/.local/state/agentic-misp-mcp/logs:/app/logs",
+           "agentic-misp-mcp:local",
+           "--transport", "stdio"
+         ]
+       }
+     }
+   }
+   ```
+
+### Verify it's working
+
+Either path: `config-check` should print `Configuration check: OK` with `MISP_API_KEY is set
+([REDACTED])`. Then ask your MCP client to run a read-only tool — for example `search_ioc` with a
+known indicator — and confirm you get a structured JSON result back. See "Testing against a live
+MISP lab" below for a deeper validation walkthrough (MCP Inspector, SSH tunneling, a read-only
+test checklist).
+
 ## Live lab validation status
 
 The first live validation was performed against a controlled, non-production MISP lab.
@@ -117,178 +253,75 @@ These tools are blocked unless write mode and role allow the action; write execu
 
 Write-tool results are explicit: `blocked`, `pending_approval`, or `executed`. There are no silent writes.
 
-## Quick start
+## Testing against a live MISP lab (optional)
 
-### Local install
+Beyond the Quick start above, this section covers the deeper flow used for this project's own
+live-lab validation (see the validation table below) — useful if you want to reproduce it, or run
+the same checks against your own non-production MISP lab. It assumes you already completed the
+Docker Quick start above (image built, env file and log directory created).
 
-```bash
-python -m pip install -e ".[dev]"
-```
-
-Or, if you use `uv` for development:
-
-```bash
-uv run --extra dev agentic-misp-mcp --help
-```
-
-### Configure `.env`
-
-```bash
-cp .env.example .env
-# edit .env with your local runtime values
-```
-
-Minimum required variables:
-
-```env
-MISP_URL=https://misp.example.local
-MISP_API_KEY=your_misp_api_key_here
-```
-
-Do not commit `.env` or real API keys.
-
-### Validate configuration
-
-```bash
-agentic-misp-mcp config-check
-```
-
-`config-check` does not connect to MISP and redacts the API key.
-
-### Run over stdio
-
-```bash
-agentic-misp-mcp --transport stdio
-```
-
-### Docker usage
-
-This flow was used for the first live read-only lab validation against MISP `2.5.42`. It uses
-generic paths — replace them with your own locations outside the repository.
-
-#### Build image
-
-```bash
-cd /path/to/agentic-misp-mcp
-docker build -t agentic-misp-mcp:live-test .
-```
-
-#### Create env file outside the repository
-
-```bash
-mkdir -p /home/user/.config/agentic-misp-mcp
-cat > /home/user/.config/agentic-misp-mcp/live.env <<'EOF'
-# Example lab environment
-MISP_URL=https://misp-lab.example.local
-MISP_API_KEY=replace_with_your_lab_api_key
-MISP_VERIFY_TLS=false
-
-MISP_TIMEOUT_SECONDS=30
-MISP_DEFAULT_LIMIT=20
-MISP_MAX_LIMIT=100
-MISP_EVENT_ATTRIBUTE_LIMIT=50
-MISP_RELATED_EVENT_LIMIT=5
-
-AGENTIC_MISP_MCP_AUDIT_LOG_PATH=/app/logs/audit.jsonl
-AGENTIC_MISP_MCP_LOG_LEVEL=INFO
-AGENTIC_MISP_MCP_ROLE=read_only
-AGENTIC_MISP_MCP_ENABLE_WRITE=false
-AGENTIC_MISP_MCP_REQUIRE_APPROVAL=true
-AGENTIC_MISP_MCP_APPROVAL_TOKEN=
-AGENTIC_MISP_MCP_MAX_RESPONSE_BYTES=5242880
-AGENTIC_MISP_MCP_ALLOW_INSECURE_HTTP_BIND=false
-EOF
-```
-
-`MISP_VERIFY_TLS=false` is lab-only, for a self-signed certificate on an isolated lab MISP
-instance. Do not use it for production-like environments; keep TLS verification enabled there.
-
-#### Create audit log directory
-
-```bash
-mkdir -p /home/user/.local/state/agentic-misp-mcp/logs
-```
-
-#### Run config-check
+### Test MISP connectivity from inside the container
 
 ```bash
 docker run --rm \
-  --env-file /home/user/.config/agentic-misp-mcp/live.env \
-  -v /home/user/.local/state/agentic-misp-mcp/logs:/app/logs \
-  agentic-misp-mcp:live-test \
-  config-check
-```
-
-`config-check` validates runtime configuration and audit-log writability. It does not prove MISP
-API connectivity.
-
-#### Test MISP connectivity from inside the container
-
-```bash
-docker run --rm \
-  --env-file /home/user/.config/agentic-misp-mcp/live.env \
+  --env-file ~/.config/agentic-misp-mcp/.env \
   --entrypoint python \
-  agentic-misp-mcp:live-test \
+  agentic-misp-mcp:local \
   -c "import os, httpx; verify=os.environ.get('MISP_VERIFY_TLS','true').lower()=='true'; r=httpx.get(os.environ['MISP_URL'].rstrip('/') + '/servers/getVersion', headers={'Authorization': os.environ['MISP_API_KEY'], 'Accept':'application/json'}, verify=verify, timeout=10); print('STATUS:', r.status_code); print(r.text[:1000])"
 ```
 
-Expected result:
+A `STATUS: 200` response confirms the container can reach the MISP API before running any MCP tools.
 
-```text
-STATUS: 200
-```
+### Run with MCP Inspector
 
-A `200` response confirms the container can reach the MISP API before running any MCP tools.
-
-#### Run the MCP server over stdio
-
-```bash
-docker run --rm -i \
-  --env-file /home/user/.config/agentic-misp-mcp/live.env \
-  -v /home/user/.local/state/agentic-misp-mcp/logs:/app/logs \
-  agentic-misp-mcp:live-test --transport stdio
-```
-
-#### Run with MCP Inspector
-
-Live validation used MCP Inspector v0.22.0 against the stdio transport:
+Against Docker:
 
 ```bash
 npx @modelcontextprotocol/inspector@0.22.0 \
   docker run --rm -i \
-    --env-file /home/user/.config/agentic-misp-mcp/live.env \
-    -v /home/user/.local/state/agentic-misp-mcp/logs:/app/logs \
-    agentic-misp-mcp:live-test --transport stdio
+    --env-file ~/.config/agentic-misp-mcp/.env \
+    -v ~/.local/state/agentic-misp-mcp/logs:/app/logs \
+    agentic-misp-mcp:local --transport stdio
 ```
 
-#### Headless host access with SSH tunnel
+Against a local (non-Docker) install:
 
-MCP Inspector serves its client UI and proxy on ports 6274 and 6277. When Inspector runs on a
-headless Linux host, forward both ports over SSH and open the UI from your workstation browser:
+```bash
+npx @modelcontextprotocol/inspector@0.22.0 \
+  uv --directory /path/to/agentic-misp-mcp run agentic-misp-mcp --transport stdio
+```
+
+For headless/CI use (no browser UI), pass `--cli` and `--method`:
+
+```bash
+npx -y @modelcontextprotocol/inspector --cli \
+  uv --directory /path/to/agentic-misp-mcp run agentic-misp-mcp \
+  --method tools/list
+```
+
+### Headless host access with SSH tunnel
+
+MCP Inspector's browser UI serves its client and proxy on ports 6274 and 6277. When Inspector runs
+on a headless Linux host, forward both ports over SSH and open the UI from your workstation
+browser:
 
 ```bash
 ssh -L 6274:localhost:6274 -L 6277:localhost:6277 user@mcp-host.example.local
 ```
 
-Then browse to `http://localhost:6274` on the workstation.
+Then browse to `http://localhost:6274` on the workstation. (The `--cli` mode above avoids needing
+this entirely.)
 
-#### Check audit logs
-
-```bash
-tail -n 20 /home/user/.local/state/agentic-misp-mcp/logs/audit.jsonl
-```
-
-Or pretty-print each JSON record:
+### Check audit logs
 
 ```bash
-tail -n 20 /home/user/.local/state/agentic-misp-mcp/logs/audit.jsonl | jq .
+tail -n 20 ~/.local/state/agentic-misp-mcp/logs/audit.jsonl | jq .
 ```
 
 Audit entries are JSONL, with sanitized arguments and policy decision fields. Successful calls,
-validation failures, runtime errors, and blocked write attempts are recorded. Blocked policy
-decisions use `outcome=blocked`.
-
-Do not bake secrets into the image. Pass credentials only at runtime.
+validation failures, runtime errors, blocked write attempts, and MISP-side write rejections
+(`outcome: "failed"`) are all recorded — see [`docs/security.md`](docs/security.md) for the full
+outcome semantics.
 
 ### Read-only live test checklist
 
@@ -314,37 +347,11 @@ Use this checklist for a controlled, non-production MISP lab:
 - [ ] Confirm no write tools were executed.
 
 The specific IOC and event ID values used in one lab may not exist in another MISP instance. Use
-known-good indicators from your own lab dataset.
-
-### Docker MCP client configuration
-
-For MCP clients that can spawn Docker on the same host, use stdio with `docker run`:
-
-```json
-{
-  "mcpServers": {
-    "agentic-misp-mcp": {
-      "type": "stdio",
-      "command": "docker",
-      "args": [
-        "run",
-        "--rm",
-        "-i",
-        "--env-file",
-        "/home/user/.config/agentic-misp-mcp/live.env",
-        "-v",
-        "/home/user/.local/state/agentic-misp-mcp/logs:/app/logs",
-        "agentic-misp-mcp:live-test",
-        "--transport",
-        "stdio"
-      ]
-    }
-  }
-}
-```
-
-This pattern assumes the MCP client can spawn Docker on the same host. For remote or headless
-testing, run the client on the Docker host or use MCP Inspector with SSH port forwarding.
+known-good indicators from your own lab dataset. For the controlled-write path
+(`propose_event`/`propose_attribute`/the four `_with_approval` tools), see
+[`docs/approval-flow.md`](docs/approval-flow.md) and
+[`docs/live-validation-plan.md`](docs/live-validation-plan.md) — never run write testing against
+anything but an isolated lab.
 
 ## Example agent prompts
 
@@ -384,11 +391,10 @@ See `docs/configuration.md` for more examples.
 - Treat HTTP transport as experimental. Binding to `0.0.0.0` is refused by default because HTTP mode has no built-in auth/TLS; use `127.0.0.1` or place it behind authenticated TLS termination and explicitly opt in.
 - Keep `.env`, audit logs, and API keys out of git.
 - Automated tests still use mocked MISP responses.
-- First manual read-only live lab validation has passed against MISP `2.5.42`.
-- Controlled write validation and broader MISP version compatibility remain pending.
+- First manual read-only live lab validation has passed against MISP `2.5.42`; controlled-write validation has since passed against the same lab. Broader MISP version compatibility remains pending.
 - A read-only write-block test confirmed that `approved=true` does not bypass disabled write mode or the `read_only` role.
 - Blocked policy decisions are audited with `allowed=false`, `success=false`, and `outcome=blocked`.
-- Successful allowed calls are audited with `outcome=success`; runtime failures are audited with `outcome=error`.
+- Successful allowed calls are audited with `outcome=success`; runtime failures are audited with `outcome=error`; a controlled write that reaches MISP but is rejected by MISP itself (`saved`/`published: false`) is audited with `outcome=failed`.
 - Approval tokens and other sensitive values are redacted in audit logs.
 - See `SECURITY.md` and `docs/security.md` for reporting and deployment guidance.
 
@@ -453,3 +459,5 @@ Two real bugs surfaced during that pass and are now fixed:
 ## Contributing
 
 Contributions are welcome, but keep the project boundary intact: no raw API proxy, no secret passthrough, no unaudited tool path, and no write behavior without policy and approval gates. Start by reading `PROJECT_STATE.md`, `docs/security.md`, and `src/agentic_misp_mcp/tools/registry.py`.
+
+Commits should be attributed to their human author only — do not add AI co-author trailers (for example `Co-Authored-By: <AI assistant>`) to commits in this repository, regardless of what tooling was used to help write them.
