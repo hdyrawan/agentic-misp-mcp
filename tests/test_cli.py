@@ -1,8 +1,31 @@
 from __future__ import annotations
 
+import json
+
 import pytest
 
 from agentic_misp_mcp.cli import main
+
+MINIMAL_OPENAPI_SPEC = {
+    "openapi": "3.0.0",
+    "info": {"title": "MISP", "version": "1.0.0"},
+    "paths": {
+        "/attributes/restSearch": {
+            "post": {
+                "operationId": "restSearchAttributes",
+                "summary": "Search MISP attributes",
+                "tags": ["Attributes"],
+            }
+        },
+        "/attributes/delete/{id}": {
+            "delete": {
+                "operationId": "deleteAttribute",
+                "summary": "Delete an attribute",
+                "tags": ["Attributes"],
+            }
+        },
+    },
+}
 
 
 def _valid_env(monkeypatch, tmp_path, api_key: str = "super-secret-test-key") -> None:
@@ -26,6 +49,7 @@ def test_cli_help(capsys):
     assert exc.value.code == 0
     assert "--transport" in output
     assert "config-check" in output
+    assert "openapi-inventory" in output
 
 
 def test_cli_version(capsys):
@@ -124,3 +148,38 @@ def test_config_check_does_not_print_secret(monkeypatch, tmp_path, capsys):
     assert code == 0
     assert secret not in captured.out
     assert secret not in captured.err
+
+
+def test_openapi_inventory_writes_markdown_file(tmp_path, capsys):
+    spec_file = tmp_path / "misp-openapi.json"
+    spec_file.write_text(json.dumps(MINIMAL_OPENAPI_SPEC), encoding="utf-8")
+    output_file = tmp_path / "openapi-inventory.md"
+
+    code = main(["openapi-inventory", "--input", str(spec_file), "--output", str(output_file)])
+
+    output = capsys.readouterr().out
+    assert code == 0
+    assert "Wrote OpenAPI inventory for 2 endpoint(s)" in output
+    assert output_file.exists()
+    written = output_file.read_text(encoding="utf-8")
+    assert "MISP OpenAPI Inventory" in written
+    assert "Planning only" in written
+
+
+def test_openapi_inventory_reports_missing_input_file(tmp_path):
+    missing_file = tmp_path / "does-not-exist.json"
+
+    with pytest.raises(SystemExit) as exc:
+        main(["openapi-inventory", "--input", str(missing_file)])
+
+    assert exc.value.code == 2
+
+
+def test_openapi_inventory_reports_invalid_json(tmp_path):
+    bad_file = tmp_path / "bad-spec.json"
+    bad_file.write_text("not json", encoding="utf-8")
+
+    with pytest.raises(SystemExit) as exc:
+        main(["openapi-inventory", "--input", str(bad_file)])
+
+    assert exc.value.code == 2

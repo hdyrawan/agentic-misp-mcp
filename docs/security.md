@@ -65,6 +65,15 @@ JSON. They respect `MISP_EVENT_ATTRIBUTE_LIMIT` and `MISP_RELATED_EVENT_LIMIT`, 
 own `limit` argument. The two Markdown report tools return deterministic, bounded text — no
 LLM call is made to generate them.
 
+## OpenAPI inventory (planning only)
+
+`agentic-misp-mcp openapi-inventory` classifies endpoints from a MISP OpenAPI spec into
+`read`/`write`/`admin`/`sync`/`dangerous`/`unknown` categories with a risk level and
+recommended role, to help plan future controlled-write work. It is a local, offline,
+read-only-of-the-spec-file operation: it does not call MISP, does not expose any MISP API
+endpoint as an MCP tool, and does not change the current read-only tool boundary above. See
+`docs/openapi-inventory.md` for a generated sample.
+
 ## Warninglist behavior
 
 MISP warninglist endpoint behavior can vary between deployments and versions. This project isolates this logic in `misp/warninglists.py`. If the warninglist check is unavailable or the response shape is not recognized, the tool returns a structured `not_available` state rather than pretending the check succeeded.

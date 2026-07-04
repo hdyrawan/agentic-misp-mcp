@@ -75,11 +75,15 @@ agentic-misp-mcp --version
 agentic-misp-mcp config-check
 agentic-misp-mcp --transport stdio
 agentic-misp-mcp --transport http --host 0.0.0.0 --port 8000
+agentic-misp-mcp openapi-inventory --input <misp-openapi.json> --output docs/openapi-inventory.md
 ```
 
 `config-check` validates environment configuration without connecting to MISP and never prints
 `MISP_API_KEY`. `--transport http` is experimental and depends on the installed FastMCP runtime;
-stdio is the primary supported transport.
+stdio is the primary supported transport. `openapi-inventory` classifies a MISP OpenAPI spec
+(JSON only) into a read/write/admin/sync/dangerous risk inventory for internal planning — it
+does not expose any MISP API endpoint as an MCP tool or call MISP; see
+[`docs/openapi-inventory.md`](docs/openapi-inventory.md) for a generated sample.
 
 ## Development
 
