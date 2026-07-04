@@ -7,6 +7,7 @@ from pydantic import ValidationError
 
 from agentic_misp_mcp import __version__
 from agentic_misp_mcp.config_check import check_configuration, format_validation_error_lines
+from agentic_misp_mcp.openapi import generate_markdown_inventory_file
 from agentic_misp_mcp.server import StartupConfigurationError, run_server
 
 
@@ -21,6 +22,22 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers.add_parser(
         "config-check",
         help="Validate environment configuration without connecting to MISP.",
+    )
+
+    openapi_inventory_parser = subparsers.add_parser(
+        "openapi-inventory",
+        help=(
+            "Classify a MISP OpenAPI spec into a read/write/admin/sync/dangerous risk "
+            "inventory. Planning only; does not expose any MISP API endpoint as a tool."
+        ),
+    )
+    openapi_inventory_parser.add_argument(
+        "--input", required=True, help="Path to a MISP OpenAPI spec in JSON format."
+    )
+    openapi_inventory_parser.add_argument(
+        "--output",
+        default="docs/openapi-inventory.md",
+        help="Path to write the generated Markdown inventory (default: docs/openapi-inventory.md).",
     )
 
     parser.add_argument(
@@ -52,6 +69,16 @@ def main(argv: list[str] | None = None) -> int:
         stream = sys.stdout if result.ok else sys.stderr
         stream.write(result.render())
         return 0 if result.ok else 2
+
+    if args.command == "openapi-inventory":
+        try:
+            count, output_path = generate_markdown_inventory_file(
+                input_path=args.input, output_path=args.output
+            )
+        except (OSError, ValueError) as exc:
+            parser.exit(2, f"OpenAPI inventory error: {exc}\n")
+        sys.stdout.write(f"Wrote OpenAPI inventory for {count} endpoint(s) to {output_path}\n")
+        return 0
 
     try:
         run_server(transport=args.transport, host=args.host, port=args.port)
