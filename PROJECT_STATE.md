@@ -35,6 +35,20 @@ Current status:
   release-check validation completed for safe public GitHub publishing as an early-development
   MIT-licensed open-source project. README has been rewritten for publish readiness, and
   `llms.txt` has been added for LLM/coding-agent orientation. No git tag has been created.
+- Phase 10.1 complete: external review follow-up documentation added. Added `docs/testing.md`
+  (mocked endpoint/response/workflow coverage and known gaps), `docs/roles.md` (per-role
+  intended use, allowed tool categories, write permissions, approval requirements, and
+  limitations — explicitly clarifying that `admin` does not expose any raw MISP admin API and
+  that no user/organisation/server/settings admin tools exist), `docs/approval-flow.md` (the
+  `approved=false` → `pending_approval` → `approved=true` flow with worked examples for
+  `submit_ioc_with_approval` and `publish_event_with_approval`), and
+  `docs/live-validation-plan.md` (the live MISP lab validation checklist, not yet executed).
+  README now links all four alongside existing docs. No MCP tools were added, no tool behavior
+  changed, and no dry-run mode was added in this phase.
+- Dry-run mode was considered during this review follow-up but deliberately **deferred** until
+  after live lab validation (`docs/live-validation-plan.md`) is complete, so that any dry-run
+  behavior can be designed against confirmed real MISP response shapes rather than mocked
+  assumptions.
 
 Current tests: 124 passed.
 Current MCP tool count: 19.

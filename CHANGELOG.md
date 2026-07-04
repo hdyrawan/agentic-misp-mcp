@@ -7,6 +7,35 @@ live MISP compatibility testing is still pending.
 
 ## Unreleased
 
+### Phase 10.1 - Review follow-up documentation
+
+### Added
+
+- Added `docs/testing.md` documenting exactly which mocked MISP-like endpoints and response
+  shapes are covered, which workflows/tools are tested with mocks, what is not covered yet
+  (rate limiting, malformed responses, timeouts, large/paginated results, version drift), and
+  that live MISP validation is still pending.
+- Added `docs/roles.md` documenting the `read_only`, `analyst_write`, `curator`, and `admin`
+  policy roles: intended use, allowed tool categories, controlled write permissions, approval
+  requirements, and limitations for each — explicitly clarifying that the `admin` role does not
+  expose any raw MISP admin API and that no user/organisation/server/settings admin tools exist.
+- Added `docs/approval-flow.md` documenting the controlled write approval flow end to end
+  (`approved=false` first call, `pending_approval` response, presenting the proposal to a
+  human, explicit approval, second call with `approved=true`, audit logging), with worked
+  examples for `submit_ioc_with_approval` and `publish_event_with_approval`.
+- Added `docs/live-validation-plan.md`, a live MISP lab validation checklist covering MISP
+  version, deployment method, API key permissions, warninglist load state, read/report/pivot
+  tools, controlled write tools (lab only), large-event testing, rate-limit/timeout/error-path
+  testing, warninglist testing, and expected evidence to record. Not yet executed.
+- Linked all four new documents (plus existing `docs/security.md`, `docs/configuration.md`, and
+  `docs/openapi-inventory.md`) from a new README "Documentation" section.
+
+### Changed
+
+- No MCP tools were added or removed and no tool behavior changed in this phase — this was a
+  documentation-only follow-up to external review. Dry-run mode was considered and deliberately
+  deferred until after live lab validation is complete.
+
 ### Phase 10 - Release readiness
 
 ### Changed
