@@ -45,7 +45,12 @@ The original 13 read tools are classified as `read` and remain allowed under `re
 - `propose_event` and `propose_attribute` build a MISP event/attribute creation payload and
   **never** write to MISP. They return the proposed payload, a risk level, the required role,
   and whether approval would be required, plus a `blocked` status if the current
-  role/write-mode does not even allow proposing the write.
+  role/write-mode does not even allow proposing the write. Before building a proposal, both
+  tools validate the payload against required fields, value ranges (`distribution`,
+  `threat_level_id`, `analysis`), and a known-vocabulary allowlist of standard MISP attribute
+  types/categories (`policy/proposal_validation.py`). A malformed or unsupported payload returns
+  `status: "invalid"` with a `validation_errors` list instead of a proposal — no payload is built
+  and MISP is never contacted either way.
 - `submit_ioc_with_approval`, `add_sighting_with_approval`, `tag_event_with_approval`, and
   `publish_event_with_approval` each accept `approved: bool = False`, optional `approval_token`
   for lab mode, and optional `approval_request_id` for production mode. Each call returns one of:
@@ -124,15 +129,18 @@ TLS verification is enabled by default with `MISP_VERIFY_TLS=true`. Disabling TL
 
 Every MCP tool call writes one JSONL audit record, including failures. Audit records include tool
 name, sanitized arguments, policy decision fields, an `outcome` of `success`, `blocked`, `failed`,
-or `error`, duration, and safe error type/message. A policy decision with `allowed: false` (for
-example a write attempt while read-only or with writes disabled) is recorded with
-`success: false` and `outcome: "blocked"`, distinct from runtime errors, even though the tool call
-itself returns normally rather than raising. A controlled-write tool that calls MISP without
+`invalid`, or `error`, duration, and safe error type/message. A policy decision with
+`allowed: false` (for example a write attempt while read-only or with writes disabled) is recorded
+with `success: false` and `outcome: "blocked"`, distinct from runtime errors, even though the tool
+call itself returns normally rather than raising. A controlled-write tool that calls MISP without
 raising, but whose result reports `status: "failed"` (MISP itself rejected the write — see
 `tag_event_with_approval`/`publish_event_with_approval` above), is recorded with
 `success: false` and `outcome: "failed"`, distinct from both `blocked` (policy never allowed the
-call) and `success` (MISP accepted the write). Audit records do not include authorization
-headers, API keys, approval tokens, authkeys, cookies, passwords, or raw backend response bodies.
+call) and `success` (MISP accepted the write). `propose_event`/`propose_attribute` report
+`outcome: "invalid"` (also `success: false`) when the proposed payload itself fails validation —
+policy allowed the attempt, but the payload was malformed and MISP was never contacted; see
+"Write tool behavior" above. Audit records do not include authorization headers, API keys,
+approval tokens, authkeys, cookies, passwords, or raw backend response bodies.
 
 The audit log path is validated at startup. Its parent directory must already be writable or be
 creatable by the runtime user. Container examples mount `./logs` into `/app/logs` so logs persist

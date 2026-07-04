@@ -11,6 +11,13 @@ The current `main` branch contains the `v0.2.0-beta.1` production-write beta can
 
 It does not add new MISP write capabilities, raw proxy behavior, admin tools, or new MISP endpoints. `propose_event` and `propose_attribute` remain proposal-only.
 
+`v0.2.0-rc.1` (release candidate, built on top of `v0.2.0-beta.2`) adds payload validation to
+`propose_event`/`propose_attribute`: required fields, `distribution`/`threat_level_id`/`analysis`
+ranges, and a known-vocabulary attribute type/category allowlist. A malformed or unsupported
+payload now returns `status: "invalid"` with a `validation_errors` list instead of a proposal —
+see [`docs/security.md`](security.md) and `policy/proposal_validation.py`. This does not change
+anything about the production approval mechanism described below.
+
 ## Modes
 
 ### Lab approval mode

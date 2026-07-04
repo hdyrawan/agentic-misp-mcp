@@ -12,15 +12,16 @@ It must not become a raw MISP API proxy.
 ## Project status
 
 - Early development.
-- `main` contains the `v0.2.0-beta.1` production-write beta candidate. The
-  `hardening/v0.2.0-beta.2-operational-readiness` branch contains `v0.2.0-beta.2`, an
-  operational-readiness hardening release on top of it (config doctor, approval-store pruning,
-  rollback playbook, closed test gaps — no new MCP tools, no new MISP write capability). Both are
-  suitable for isolated pilot validation only; neither is GA production-ready. Production
-  deployment is not yet validated; see production-readiness.md for scope, requirements, and
+- `main` contains `v0.2.0-beta.2` (config doctor, approval-store pruning, rollback playbook,
+  closed test gaps — no new MCP tools, no new MISP write capability), merged from
+  `hardening/v0.2.0-beta.2-operational-readiness`. This is `v0.2.0-rc.1`, a **release candidate
+  for GA review**, built on top of `v0.2.0-beta.2`: it adds `propose_event`/`propose_attribute`
+  payload validation, a MISP version compatibility matrix (`docs/misp-compatibility.md`), and a
+  fixed Dependabot config. Not GA production-ready. Production deployment is not yet validated;
+  see production-readiness.md and ga-production-readiness-plan.md for scope, requirements, and
   acceptance criteria.
-- Current MCP tool count: 19 (unchanged in `v0.2.0-beta.2`; the two new operator commands below are
-  CLI-only, not MCP tools).
+- Current MCP tool count: 19 (unchanged since Phase 8; config doctor/approvals prune/the new
+  validation layer are not new MCP tools).
 - Primary transport: stdio.
 - HTTP transport is experimental.
 - Python 3.11+.
@@ -28,7 +29,9 @@ It must not become a raw MISP API proxy.
 - Automated tests use mocked MISP responses, plus live-lab validation (see below).
 - Live read-only lab validation passed against MISP 2.5.42 using Docker, stdio, and MCP Inspector.
 - Core controlled-write validation passed in the same lab: submit_ioc_with_approval, add_sighting_with_approval, tag_event_with_approval, publish_event_with_approval, plus policy blocking. Two real bugs found during that pass are fixed (see "Live validation notes" below).
-- Still pending (live evidence, not mocked): propose_event/propose_attribute payload validation, large event/result-set behavior at realistic scale, rate-limit/timeout/TLS failure modes, warninglist endpoint compatibility, broader MISP version compatibility, and final sign-off. `v0.2.0-beta.2` closed the large-result/rate-limit/warninglist-hit/warninglist-not_available gaps with mocked/controlled tests only (see `tests/test_operational_gap_closure.py` and `docs/live-validation-report-v0.2.0-beta.2.md`).
+- Still pending (live evidence, not mocked): large event/result-set behavior at realistic scale,
+  rate-limit/timeout/TLS failure modes, warninglist endpoint compatibility, broader MISP version
+  compatibility, and final sign-off. `v0.2.0-beta.2` closed the large-result/rate-limit/warninglist-hit/warninglist-not_available gaps with mocked/controlled tests only (see `tests/test_operational_gap_closure.py` and `docs/live-validation-report-v0.2.0-beta.2.md`). `v0.2.0-rc.1` closes propose_event/propose_attribute payload-shape validation at the code/test level only (`tests/test_proposal_validation.py`); live cross-checking against a real MISP instance remains open.
 
 ## v0.2.0-beta.2 operational-readiness hardening
 
@@ -42,6 +45,27 @@ It must not become a raw MISP API proxy.
   (`7d`/`30d`/`24h`/`3600s`-style durations); never deletes pending/approved records; not exposed
   through any MCP tool.
 - `docs/rollback.md` — rollback playbook for a mistaken controlled write.
+
+## v0.2.0-rc.1 GA-readiness release candidate
+
+Builds on `v0.2.0-beta.2`. A release candidate for GA review, not a GA claim. No new MCP tools,
+no new MISP write capability, no raw proxy/admin behavior.
+
+- `propose_event`/`propose_attribute` validate the proposed payload before building it: required
+  fields, `distribution`/`threat_level_id`/`analysis` ranges, tag list shape, and a
+  known-vocabulary allowlist of standard MISP attribute types/categories
+  (`src/agentic_misp_mcp/policy/proposal_validation.py`). Malformed/unsupported payloads return
+  `status: "invalid"` (audited as `outcome: "invalid"`) with `validation_errors`, never a
+  proposal; MISP is never contacted either way.
+- Fixed `.github/dependabot.yml` (previously blank `package-ecosystem`, so no updates were
+  actually running); now tracks `pip` and `github-actions`.
+- Added `docs/misp-compatibility.md` (MISP version compatibility matrix) and
+  `docs/live-beta-validation-v0.2.0-rc.1.md` (this release candidate's live validation checklist).
+- Still open: live edge-case evidence (TLS fail-closed, timeout, real HTTP 429, large-result
+  truncation at scale, a positive warninglist hit against real data), live cross-checking of
+  propose_event/propose_attribute payload shapes against a real MISP instance, broader MISP
+  version compatibility, and supply-chain/release hygiene (container/dependency/secret scanning,
+  a signed release tag) — see `docs/ga-production-readiness-plan.md`.
 
 ## Safety boundaries
 

@@ -8,6 +8,41 @@ testing is still pending.
 
 ## Unreleased
 
+### v0.2.0-rc.1 GA-readiness release candidate (2026-07-04)
+
+`v0.2.0-rc.1` builds on `v0.2.0-beta.2` and is a **release candidate for GA review**, not a GA
+claim. It adds no new MCP tools, no new MISP write capability, and no raw proxy/admin behavior.
+
+- Added payload validation to `propose_event`/`propose_attribute`
+  (`src/agentic_misp_mcp/policy/proposal_validation.py`): required fields, `distribution`/
+  `threat_level_id`/`analysis` value ranges, tag list shape, and a known-vocabulary allowlist of
+  standard MISP attribute types/categories. A malformed or unsupported payload now returns a new
+  `status: "invalid"` (audited as a new `outcome: "invalid"`, distinct from `blocked`/`failed`/
+  `success`) with a `validation_errors` list, instead of building a proposal. Both tools still
+  never call MISP either way. See `tests/test_proposal_validation.py`,
+  `tests/workflows/test_controlled_write.py`, and `tests/test_controlled_write_tools.py`.
+- Fixed `.github/dependabot.yml`: its `package-ecosystem` value was blank, so no Dependabot
+  updates were actually running. It now tracks `pip` and `github-actions` ecosystems on a weekly
+  schedule. Documented the dependency-update review process and the still-open
+  container-image/dependency/secret scanning release-checklist items in
+  `docs/production-readiness.md`.
+- Added `docs/misp-compatibility.md`: a MISP version compatibility matrix documenting the one
+  version this project has actually tested against (`2.5.42`), this project's API/response-shape
+  assumptions, untested versions, and known version-drift risks (especially warninglist endpoint
+  shape and the curated attribute type/category vocabulary).
+- Added `docs/live-beta-validation-v0.2.0-rc.1.md`: the live validation checklist for this release
+  candidate. As of this release, it has **not** been executed — every item is pending, not passed.
+  No `docs/live-validation-report-v0.2.0-rc.1.md` was created, since no live validation was
+  actually run; creating one without real evidence would misrepresent validation status.
+- Updated `docs/ga-production-readiness-plan.md`, `docs/production-readiness.md`,
+  `docs/production-write.md`, `docs/security.md`, `docs/configuration.md`,
+  `docs/approval-flow.md`, `README.md`, and `llms.txt` to describe the new validation behavior,
+  the new `invalid` audit outcome, and this release's actual (partial) progress against the GA
+  plan's open items. This release does not claim GA production readiness; see
+  `docs/ga-production-readiness-plan.md` for what remains.
+- 254 mocked/controlled tests pass (up from 220 on `main` at the start of this pass); `ruff
+  check`/`ruff format --check` clean.
+
 ### v0.2.0-beta.2 operational-readiness hardening (2026-07-04)
 
 `v0.2.0-beta.2` builds on the `v0.2.0-beta.1` production-write approval beta with operational

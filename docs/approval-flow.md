@@ -6,9 +6,12 @@ This page documents both approval modes. The historical `approved=true` flow bel
 This document describes exactly how the four `_with_approval` MCP tools
 (`submit_ioc_with_approval`, `add_sighting_with_approval`, `tag_event_with_approval`,
 `publish_event_with_approval`) behave, so an agent (or a human reading its output) knows what to
-expect at each step. `propose_event` and `propose_attribute` are simpler — they always build a
-proposal and never call MISP, regardless of any approval argument — so they are not part of this
-flow; see `docs/security.md` and `docs/roles.md` for those two.
+expect at each step. `propose_event` and `propose_attribute` are simpler — they never call MISP
+regardless of any approval argument, so they are not part of this flow. As of `v0.2.0-rc.1` they
+also validate the proposed payload first: a well-formed, allowed request builds a proposal, but a
+malformed or unsupported one (missing field, out-of-range value, unrecognized attribute
+type/category) returns `status: "invalid"` instead — see `docs/security.md` and `docs/roles.md`
+for those two.
 
 ## The contract in one sentence
 
