@@ -6,7 +6,16 @@ This project is in **early development**. It has mocked test coverage plus live-
 (read-only and controlled-write) against MISP `2.5.42`; broader MISP version compatibility
 testing is still pending.
 
-## Unreleased
+## v0.2.0 (2026-07-04) — first GA release
+
+`v0.2.0` is a GA release, not full production-readiness certification (see
+`docs/production-readiness.md` for that broader, stricter checklist). GA here means: automated
+tests pass (257), live validation against a real MISP lab found no unresolved critical blockers,
+docs are consistent, secrets/redaction review passes, and known limitations are documented — see
+`docs/live-validation-report-v0.2.0-rc.1.md` and `docs/ga-production-readiness-plan.md`. It builds
+on `v0.2.0-rc.1` (tagged and released as a GitHub pre-release) plus two fixes found during that
+release candidate's own live validation pass, detailed below. No new MCP tools, no new MISP write
+capability, no raw proxy/admin behavior were introduced anywhere in this progression.
 
 ### v0.2.0-rc.1 live validation fixes (2026-07-04)
 

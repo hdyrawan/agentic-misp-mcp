@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "agentic-misp-mcp"
-version = "0.2.0-rc.1"
+version = "0.2.0"
 description = "Agentic MCP server for analyst-oriented MISP threat intelligence workflows"
 readme = "README.md"
 requires-python = ">=3.11"

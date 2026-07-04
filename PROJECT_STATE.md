@@ -13,17 +13,32 @@ Current status:
   count and write-tool count (6) remain unchanged. See `docs/live-validation-report-v0.2.0-beta.2.md`
   for live validation evidence (config doctor / approvals prune run against the same lab used for
   beta.1, plus a read-only regression smoke test — no bugs found).
-- Current release-candidate branch `release/v0.2.0-rc.1-ga-readiness` contains `v0.2.0-rc.1` on
-  top of `v0.2.0-beta.2`: adds payload validation to `propose_event`/`propose_attribute`
-  (`policy/proposal_validation.py` — required fields, value ranges, known attribute
-  type/category vocabulary; a malformed/unsupported payload now returns `status: "invalid"`,
-  audited as a new `outcome: "invalid"`, and still never calls MISP), a MISP compatibility matrix
-  (`docs/misp-compatibility.md`), a fixed `.github/dependabot.yml` (previously blank
-  `package-ecosystem`), and a documented dependency-update/supply-chain release-checklist process.
-  No MCP tools were added or changed; the MCP tool count and write-tool count (6) remain
-  unchanged. This is a **release candidate for GA review, not a GA claim** — see
-  `docs/ga-production-readiness-plan.md` for what remains. Not yet merged to `main`; not yet
-  tagged.
+- `main` now contains `v0.2.0`, the **first GA release** (merged via PR #9, commit `810d76e`, then
+  PR #13 with two live-validation fixes, commit `c846035`). `v0.2.0-rc.1` was tagged and released
+  as a GitHub pre-release at `810d76e`; its own release notes were amended to flag that the two
+  fixes below post-date that exact tagged artifact. `v0.2.0-rc.1` added payload validation to
+  `propose_event`/`propose_attribute` (`policy/proposal_validation.py` — required fields, value
+  ranges, known attribute type/category vocabulary; a malformed/unsupported payload returns
+  `status: "invalid"`, audited as a new `outcome: "invalid"`, and still never calls MISP), a MISP
+  compatibility matrix (`docs/misp-compatibility.md`), a fixed `.github/dependabot.yml`, and a
+  documented dependency-update/supply-chain release-checklist process. Live validation of
+  `v0.2.0-rc.1` against the real MISP lab then found and fixed two real defects (see
+  `docs/live-validation-report-v0.2.0-rc.1.md`):
+  - `add_sighting_with_approval` reported `status: "executed"` (audited `outcome: "success"`) for
+    a sighting MISP actually rejected (no `Sighting` key in the response, just an error
+    `message`). `MISPSightingSummary` gained a `saved`/`message` signal and the workflow now
+    returns `status: "failed"`, matching the existing `tag_event`/`publish_event` pattern.
+  - `check_warninglists` silently reported `not_available` for a real positive hit against MISP
+    `2.5.42`, because `parse_warninglist_response` didn't recognize this version's actual
+    value-keyed hit shape (`{"<value>": [{match...}]}`). Fixed by recognizing that shape.
+  No MCP tools were added or changed at any point from `v0.2.0-rc.1` to `v0.2.0`; the MCP tool
+  count and write-tool count (6) remain unchanged. `v0.2.0` is a GA release per this project's
+  evidence-based GA criteria (automated tests pass, live validation found no unresolved critical
+  blockers, docs consistent, secrets/redaction pass, known limitations documented, no unsafe tool
+  boundary) — see "Known limitations" below for what remains open beyond this GA claim, and note
+  this is **not** the same as full certification against `docs/production-readiness.md`'s broader,
+  stricter checklist (multi-version MISP compatibility, live HTTP 429, supply-chain scanning,
+  signed releases).
 - `v0.2.0-beta.1` production-write beta (now part of `main` via `v0.2.0-beta.2`): opt-in
   `AGENTIC_MISP_MCP_APPROVAL_MODE=production` adds SQLite approval records, CLI-only
   approve/reject, one-time redemption, exact operation hashes, TTL expiry, replay/payload-swap
@@ -112,13 +127,24 @@ Current status:
   and a documented dependency-update/supply-chain release-checklist process in
   `docs/production-readiness.md`. No MCP tools added or changed; write-tool count (6) and total
   tool count (19) unchanged. `docs/live-beta-validation-v0.2.0-rc.1.md` was added as a pending
-  checklist — it has not been executed, and no `docs/live-validation-report-v0.2.0-rc.1.md` was
-  created, since no live validation was actually run for this pass. This is a release candidate
-  for GA review, not a GA claim.
+  checklist at the time this phase's docs were written; it was fully executed in Phase 13 below.
+- Phase 13 complete: `v0.2.0-rc.1` live validation executed against the real MISP `2.5.42` lab
+  end-to-end (not mocked): `propose_event`/`propose_attribute` valid/invalid, TLS fail-closed,
+  timeout, large-result truncation, a real positive warninglist hit (with one warninglist
+  temporarily enabled in the lab for this check, then disabled again), warninglist miss, the full
+  production approval lifecycle (pending → require valid `approval_request_id` → block
+  `approved=true` alone → one real MISP write on redemption → block replay/wrong-tool/
+  hash-mismatch/expired/rejected redemption), audit redaction/correlation, `config doctor` against
+  safe and unsafe configs, and `approvals prune` against a disposable store. Found and fixed the
+  two real defects described above. Result recorded in
+  `docs/live-validation-report-v0.2.0-rc.1.md`. `v0.2.0-rc.1` was tagged and released as a GitHub
+  pre-release, then the two fixes were merged to `main` afterward (the tag itself was not moved;
+  its release notes were amended instead). `v0.2.0` GA release prep (version bump, RC→GA doc
+  wording) followed as this same pass's final step.
 
-Current tests: 254 passed on the `release/v0.2.0-rc.1-ga-readiness` branch (up from 220 on `main`
-at the start of this pass); re-run the quality gate before tagging.
-Current MCP tool count: 19 (unchanged; `config doctor`, `approvals prune`, and the new proposal
+Current tests: 257 passed on `main` (up from 220 at the start of the beta.2/rc.1 work, 254 at the
+`v0.2.0-rc.1` tag).
+Current MCP tool count: 19 (unchanged; `config doctor`, `approvals prune`, and the proposal
 validation layer are not MCP tools).
 Current license: MIT.
 
@@ -154,21 +180,32 @@ Current validation status:
 - Live read-only lab validation: passed (see Phase 10.2 above).
 - Core controlled-write lab validation: passed for `submit_ioc_with_approval`,
   `add_sighting_with_approval`, `tag_event_with_approval`, `publish_event_with_approval` (see
-  Phase 10.2 above).
-- Production deployment: **not yet validated**. See `docs/production-readiness.md` for scope,
-  requirements, and acceptance criteria.
-- Not production-ready: lab-validated, not production-certified.
+  Phase 10.2 above), and re-confirmed end-to-end in Phase 13 including the full production
+  approval lifecycle and one real MISP write.
+- TLS fail-closed, timeout, large-result truncation, warninglist hit/miss/`not_available`,
+  `propose_event`/`propose_attribute` validation, audit redaction/correlation, `config doctor`
+  (safe and unsafe configs), and `approvals prune`: all live-validated in Phase 13. See
+  `docs/live-validation-report-v0.2.0-rc.1.md`.
+- `v0.2.0` is a **GA release** per this project's own evidence-based GA criteria. This is
+  narrower than full production-readiness certification against `docs/production-readiness.md`'s
+  broader, stricter checklist — see "Known limitations" below.
+
+Known limitations (explicitly not covered by the `v0.2.0` GA claim):
+- Only MISP `2.5.42` has been validated; broader MISP version compatibility remains untested
+  (`docs/misp-compatibility.md`).
+- A real (non-mocked) HTTP `429`/rate-limit response was not reproduced live — no safe way to
+  trigger one in this lab without a load-testing setup, which is out of scope. Verified via a mock
+  transport only.
+- Container image scanning, dependency vulnerability scanning, secret scanning, and a signed
+  release tag are not yet part of CI/release (`docs/production-readiness.md`,
+  `docs/ga-production-readiness-plan.md`).
+- Approval-operator separation still relies on filesystem permissions rather than a stronger
+  mechanism.
 
 Next steps:
-- Execute the `v0.2.0-rc.1` live validation checklist in
-  `docs/live-beta-validation-v0.2.0-rc.1.md` (currently all pending), including a live
-  cross-check of `propose_event`/`propose_attribute` payload shapes against a real MISP instance.
-- Merge `release/v0.2.0-rc.1-ga-readiness` and tag `v0.2.0-rc.1` once reviewed.
 - Broader MISP version compatibility testing beyond `2.5.42` (`docs/misp-compatibility.md`).
-- Live (not just mocked) evidence for HTTP 429, large-result truncation at realistic scale, a
-  positive warninglist hit, TLS fail-closed, and timeout behavior remains open — see
-  `docs/production-readiness.md`'s release/sign-off checklist and
-  `docs/ga-production-readiness-plan.md` for the full path to GA.
 - Automate the three still-open supply-chain scans (dependency vulnerability, container image,
   secret scanning) in CI/release, per `docs/production-readiness.md`'s "Dependency update process
   and supply-chain release checklist".
+- Decide whether and when to tag `v0.2.0` (this GA release prep has not tagged or pushed a `v0.2.0`
+  git tag; that step was left for explicit approval).
