@@ -67,6 +67,22 @@ class PolicyEngine:
                 ),
             )
 
+        if action_value is Action.PUBLISH:
+            allowed = self.role in {Role.CURATOR, Role.ADMIN}
+            return self._decision(
+                tool_name=tool_name,
+                action=action_value,
+                allowed=allowed,
+                approval_required=allowed and self.require_approval,
+                reason=(
+                    "publish action allowed by curator/admin role and requires approval"
+                    if allowed and self.require_approval
+                    else "publish action allowed by curator/admin role"
+                    if allowed
+                    else f"{self.role.value} role cannot perform publish actions"
+                ),
+            )
+
         if action_value is Action.SYNC:
             allowed = self.role in {Role.CURATOR, Role.ADMIN}
             return self._decision(

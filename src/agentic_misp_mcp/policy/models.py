@@ -22,6 +22,7 @@ class Action(StrEnum):
 
     READ = "read"
     WRITE = "write"
+    PUBLISH = "publish"
     ADMIN = "admin"
     SYNC = "sync"
     DANGEROUS = "dangerous"

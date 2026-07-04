@@ -13,9 +13,21 @@ Current status:
   CLI command. Classifies MISP OpenAPI endpoints into read/write/admin/sync/dangerous/unknown
   with risk level, approval_required, and recommended_role. Does not expose any MISP API
   endpoint as an MCP tool.
+- Phase 7 complete: policy and approval foundation (`policy/engine.py`, `policy/approvals.py`,
+  `policy/models.py`), plus `AGENTIC_MISP_MCP_ROLE` / `AGENTIC_MISP_MCP_ENABLE_WRITE` /
+  `AGENTIC_MISP_MCP_REQUIRE_APPROVAL` settings. Read-only tool boundary unchanged (13 tools).
+- Phase 8 complete: controlled write workflows. Added exactly six new MCP tools
+  (`propose_event`, `propose_attribute`, `submit_ioc_with_approval`,
+  `add_sighting_with_approval`, `tag_event_with_approval`, `publish_event_with_approval`),
+  wired into the Phase 7 `PolicyEngine`/`ApprovalRequest` foundation. Added a `publish` policy
+  action (curator/admin only). Added narrow MISP write methods (`create_event`,
+  `add_attribute`, `add_sighting`, `tag_event`, `publish_event`) to `misp/client.py` — no
+  generic write/request proxy. Writes are disabled by default
+  (`AGENTIC_MISP_MCP_ENABLE_WRITE=false`), and even when enabled, every write tool call
+  resolves to `blocked`, `pending_approval`, or `executed` — never a silent write.
 
-Current tests: 83 passed.
-Current MCP tool count remains 13.
+Current tests: 123 passed.
+Current MCP tool count: 19.
 
 Current MCP tools:
 1. search_ioc
@@ -31,17 +43,21 @@ Current MCP tools:
 11. generate_event_report
 12. generate_markdown_ioc_report
 13. generate_markdown_event_report
+14. propose_event
+15. propose_attribute
+16. submit_ioc_with_approval
+17. add_sighting_with_approval
+18. tag_event_with_approval
+19. publish_event_with_approval
 
 Hard rules:
-- Read-only until Phase 8
 - No raw MISP API proxy
-- No write/admin tools
+- No generic user/organisation/server/settings-style admin tools
+- Write tools (14-19 above) are disabled by default and policy/approval-gated when enabled
 - No live MISP testing yet
 - No Hermes runtime testing yet
 - Mocked tests only unless explicitly requested
 
 Next phases:
-- Phase 7 policy/approval engine
-- Phase 8 controlled write workflows
 - Phase 9 production hardening
 - Phase 10 release

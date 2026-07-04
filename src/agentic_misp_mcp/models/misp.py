@@ -38,6 +38,27 @@ class MISPSearchResult(BaseModel):
     match_count: int = 0
 
 
+class MISPSightingSummary(BaseModel):
+    id: str | None = None
+    value: str | None = None
+    event_id: int | None = None
+    attribute_id: str | None = None
+    type: str | None = None
+
+
+class MISPTagResult(BaseModel):
+    event_id: int
+    tag: str
+    saved: bool = False
+    message: str | None = None
+
+
+class MISPPublishResult(BaseModel):
+    event_id: int
+    published: bool = False
+    message: str | None = None
+
+
 def _coerce_event_id(value: Any) -> int | None:
     try:
         return int(value)
@@ -98,3 +119,28 @@ def parse_event(raw: dict[str, Any], attribute_limit: int) -> MISPEventSummary:
         attributes_by_type=counts,
         attributes=attributes,
     )
+
+
+def parse_sighting(raw: dict[str, Any]) -> MISPSightingSummary:
+    sighting = raw.get("Sighting", raw)
+    return MISPSightingSummary(
+        id=str(sighting.get("id")) if sighting.get("id") is not None else None,
+        value=sighting.get("value"),
+        event_id=_coerce_event_id(sighting.get("event_id")),
+        attribute_id=(
+            str(sighting.get("attribute_id")) if sighting.get("attribute_id") is not None else None
+        ),
+        type=sighting.get("type"),
+    )
+
+
+def parse_tag_result(raw: dict[str, Any], *, event_id: int, tag: str) -> MISPTagResult:
+    saved = bool(raw.get("saved", raw.get("success", False)))
+    message = raw.get("message") or raw.get("name")
+    return MISPTagResult(event_id=event_id, tag=tag, saved=saved, message=message)
+
+
+def parse_publish_result(raw: dict[str, Any], *, event_id: int) -> MISPPublishResult:
+    message = raw.get("message") or raw.get("name")
+    published = raw.get("errors") is None
+    return MISPPublishResult(event_id=event_id, published=published, message=message)

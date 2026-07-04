@@ -1,14 +1,16 @@
 # agentic-misp-mcp
 
-`agentic-misp-mcp` is a read-only, workflow-first MCP server for MISP threat intelligence. It
-exposes analyst-oriented tools for investigating IOCs, pivoting across related indicators, and
-summarizing/explaining MISP events — it is **not** a raw MISP API proxy.
+`agentic-misp-mcp` is a workflow-first MCP server for MISP threat intelligence. It exposes
+analyst-oriented tools for investigating IOCs, pivoting across related indicators,
+summarizing/explaining MISP events, and — behind a policy/approval gate that is disabled by
+default — proposing and submitting controlled writes. It is **not** a raw MISP API proxy.
 
 ## Project status
 
 - **Early development.** APIs, tool output shapes, and internals may still change.
 - Tested with **mocked MISP responses only**. Live MISP compatibility testing is pending.
-- No write/admin tools are implemented, and none are currently planned for this stage.
+- Write tools exist but are disabled by default (`AGENTIC_MISP_MCP_ENABLE_WRITE=false`) and are
+  policy/approval-gated when enabled. No generic admin tools or raw API proxy are implemented.
 - Not yet recommended for production use.
 
 ## Scope
@@ -17,15 +19,17 @@ summarizing/explaining MISP events — it is **not** a raw MISP API proxy.
 - FastMCP
 - httpx
 - pydantic-settings
-- JSONL audit logging for every MCP tool call
+- JSONL audit logging for every MCP tool call, including policy decisions
 - Docker support
-- Read-only by default
+- Read-only by default; controlled write requires explicit configuration
 - `MISP_API_KEY` is read only from environment variables — never accepted as a tool argument
 - TLS verification (`MISP_VERIFY_TLS`) is enabled by default
 
 ### MCP tools
 
-13 analyst-oriented tools are currently exposed:
+19 analyst-oriented tools are currently exposed.
+
+13 read-only tools:
 
 - `search_ioc(value: str, limit: int = 20)`
 - `investigate_ioc(value: str, limit: int = 20)`
@@ -41,11 +45,24 @@ summarizing/explaining MISP events — it is **not** a raw MISP API proxy.
 - `generate_markdown_ioc_report(value: str)`
 - `generate_markdown_event_report(event_id: int)`
 
+6 controlled write tools (Phase 8), disabled by default and policy/approval-gated:
+
+- `propose_event(...)` — builds an event creation proposal; never writes to MISP
+- `propose_attribute(...)` — builds an attribute creation proposal; never writes to MISP
+- `submit_ioc_with_approval(..., approved: bool = False)`
+- `add_sighting_with_approval(..., approved: bool = False)`
+- `tag_event_with_approval(event_id: int, tag: str, approved: bool = False)`
+- `publish_event_with_approval(event_id: int, approved: bool = False)` — requires `curator`/`admin` role
+
+See [`docs/security.md`](docs/security.md) for the full write-behavior contract (blocked /
+pending_approval / executed).
+
 ## Non-goals
 
-This project does not implement event creation, attribute creation, sighting submission,
-tagging, publishing, raw MISP API proxying, shell execution, write/admin tools, or unrestricted
-filesystem access.
+This project does not implement raw MISP API proxying, shell execution, unrestricted filesystem
+access, or generic user/organisation/server/settings-style admin tools. Event/attribute
+creation, sighting submission, tagging, and publishing exist only as the six narrow, disabled-
+by-default, policy/approval-gated tools listed above — never as a general write API.
 
 ## Configuration
 
@@ -66,6 +83,9 @@ Safe defaults:
 - `MISP_RELATED_EVENT_LIMIT=5`
 - `AGENTIC_MISP_MCP_AUDIT_LOG_PATH=./logs/audit.jsonl`
 - `AGENTIC_MISP_MCP_LOG_LEVEL=INFO`
+- `AGENTIC_MISP_MCP_ROLE=read_only`
+- `AGENTIC_MISP_MCP_ENABLE_WRITE=false`
+- `AGENTIC_MISP_MCP_REQUIRE_APPROVAL=true`
 
 ## CLI
 

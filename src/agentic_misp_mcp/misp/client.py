@@ -13,6 +13,7 @@ from agentic_misp_mcp.exceptions import (
 from agentic_misp_mcp.misp.queries import (
     attribute_search_payload,
     event_tag_search_payload,
+    tag_payload,
     warninglist_check_payload,
 )
 from agentic_misp_mcp.misp.warninglists import (
@@ -22,8 +23,14 @@ from agentic_misp_mcp.misp.warninglists import (
 from agentic_misp_mcp.models.misp import (
     MISPAttributeSummary,
     MISPEventSummary,
+    MISPPublishResult,
+    MISPSightingSummary,
+    MISPTagResult,
     parse_attribute,
     parse_event,
+    parse_publish_result,
+    parse_sighting,
+    parse_tag_result,
 )
 from agentic_misp_mcp.settings import Settings
 
@@ -133,3 +140,39 @@ class MISPClient:
                 status="not_available", message="MISP warninglist check endpoint not available"
             )
         return parse_warninglist_response(raw)
+
+    # Controlled write methods (Phase 8). Each maps to exactly one narrow MISP write
+    # endpoint and is only ever invoked after policy allow + approval checks upstream.
+    # There is no generic request proxy exposed here or through any MCP tool.
+
+    async def create_event(self, payload: dict[str, object]) -> MISPEventSummary:
+        raw = await self._request("POST", "/events/add", json=payload)
+        if not isinstance(raw, dict):
+            raise MISPClientError("MISP event creation response was not an object")
+        return parse_event(raw, attribute_limit=100)
+
+    async def add_attribute(
+        self, event_id: int, payload: dict[str, object]
+    ) -> MISPAttributeSummary:
+        raw = await self._request("POST", f"/attributes/add/{event_id}", json=payload)
+        if not isinstance(raw, dict):
+            raise MISPClientError("MISP attribute creation response was not an object")
+        return parse_attribute(raw)
+
+    async def add_sighting(self, payload: dict[str, object]) -> MISPSightingSummary:
+        raw = await self._request("POST", "/sightings/add", json=payload)
+        if not isinstance(raw, dict):
+            raise MISPClientError("MISP sighting response was not an object")
+        return parse_sighting(raw)
+
+    async def tag_event(self, event_id: int, tag: str) -> MISPTagResult:
+        raw = await self._request("POST", f"/events/addTag/{event_id}", json=tag_payload(tag))
+        if not isinstance(raw, dict):
+            raise MISPClientError("MISP tag response was not an object")
+        return parse_tag_result(raw, event_id=event_id, tag=tag)
+
+    async def publish_event(self, event_id: int) -> MISPPublishResult:
+        raw = await self._request("POST", f"/events/publish/{event_id}")
+        if not isinstance(raw, dict):
+            raise MISPClientError("MISP publish response was not an object")
+        return parse_publish_result(raw, event_id=event_id)

@@ -7,6 +7,14 @@ from agentic_misp_mcp.misp.client import MISPClient
 from agentic_misp_mcp.policy import Action, PolicyEngine, enforce_policy
 from agentic_misp_mcp.settings import Settings
 from agentic_misp_mcp.workflows.check_warninglists import check_warninglists_workflow
+from agentic_misp_mcp.workflows.controlled_write import (
+    add_sighting_with_approval_workflow,
+    propose_attribute_workflow,
+    propose_event_workflow,
+    publish_event_with_approval_workflow,
+    submit_ioc_with_approval_workflow,
+    tag_event_with_approval_workflow,
+)
 from agentic_misp_mcp.workflows.explain_event_context import explain_event_context_workflow
 from agentic_misp_mcp.workflows.extract_event_iocs import extract_event_iocs_workflow
 from agentic_misp_mcp.workflows.find_events_by_tag import find_events_by_tag_workflow
@@ -38,6 +46,12 @@ ALLOWED_TOOL_NAMES = {
     "generate_event_report",
     "generate_markdown_ioc_report",
     "generate_markdown_event_report",
+    "propose_event",
+    "propose_attribute",
+    "submit_ioc_with_approval",
+    "add_sighting_with_approval",
+    "tag_event_with_approval",
+    "publish_event_with_approval",
 }
 
 
@@ -58,7 +72,7 @@ def register_tools(
     settings: Settings,
     audit_logger: AuditLogger,
 ) -> None:
-    """Register only approved v0.1-Phase 4 tools through the shared audit wrapper."""
+    """Register only approved v0.1-Phase 8 tools through the shared audit wrapper."""
 
     policy_engine = PolicyEngine.from_settings(settings)
 
@@ -68,6 +82,27 @@ def register_tools(
         decision = policy_engine.decide(tool_name=tool_name, action=Action.READ)
         enforce_policy(decision)
         return await audit_call(audit, tool_name, arguments, call, policy_decision=decision)
+
+    async def _audit_write_tool(
+        tool_name: str,
+        action: Action,
+        arguments: dict[str, object],
+        make_call: Any,
+    ) -> Any:
+        """Evaluate policy for a controlled write tool and audit the outcome.
+
+        Unlike `_audit_read_tool`, a disallowed decision does not raise. Write tools always
+        return a structured blocked/proposal/pending_approval/executed result so that no
+        write ever happens silently and every outcome (including blocks) is audited.
+        """
+        decision = policy_engine.decide(tool_name=tool_name, action=action)
+        return await audit_call(
+            audit_logger,
+            tool_name,
+            arguments,
+            lambda: make_call(decision),
+            policy_decision=decision,
+        )
 
     async def search_ioc(value: str, limit: int = 20) -> dict[str, object]:
         """Search MISP for an IOC and return normalized attribute matches."""
@@ -186,6 +221,164 @@ def register_tools(
             lambda: generate_markdown_event_report_workflow(client, settings, event_id),
         )
 
+    async def propose_event(
+        info: str,
+        distribution: int = 0,
+        threat_level_id: int = 4,
+        analysis: int = 0,
+        tags: list[str] | None = None,
+    ) -> dict[str, object]:
+        """Build a MISP event creation proposal. Never writes to MISP."""
+        return await _audit_write_tool(
+            "propose_event",
+            Action.WRITE,
+            {
+                "info": info,
+                "distribution": distribution,
+                "threat_level_id": threat_level_id,
+                "analysis": analysis,
+                "tags": tags or [],
+            },
+            lambda decision: propose_event_workflow(
+                decision,
+                info=info,
+                distribution=distribution,
+                threat_level_id=threat_level_id,
+                analysis=analysis,
+                tags=tags,
+            ),
+        )
+
+    async def propose_attribute(
+        event_id: int,
+        type: str,
+        value: str,
+        category: str | None = None,
+        comment: str | None = None,
+        to_ids: bool | None = None,
+    ) -> dict[str, object]:
+        """Build an attribute creation proposal for an existing event. Never writes to MISP."""
+        return await _audit_write_tool(
+            "propose_attribute",
+            Action.WRITE,
+            {
+                "event_id": event_id,
+                "type": type,
+                "value": value,
+                "category": category,
+                "comment": comment,
+                "to_ids": to_ids,
+            },
+            lambda decision: propose_attribute_workflow(
+                decision,
+                event_id=event_id,
+                type=type,
+                value=value,
+                category=category,
+                comment=comment,
+                to_ids=to_ids,
+            ),
+        )
+
+    async def submit_ioc_with_approval(
+        event_id: int,
+        type: str,
+        value: str,
+        category: str | None = None,
+        comment: str | None = None,
+        to_ids: bool | None = None,
+        approved: bool = False,
+    ) -> dict[str, object]:
+        """Submit an IOC (attribute) to MISP only when write is enabled, role permits write,
+        and approval (when required) has been explicitly given. Otherwise returns a
+        blocked/proposal result."""
+        return await _audit_write_tool(
+            "submit_ioc_with_approval",
+            Action.WRITE,
+            {
+                "event_id": event_id,
+                "type": type,
+                "value": value,
+                "category": category,
+                "comment": comment,
+                "to_ids": to_ids,
+                "approved": approved,
+            },
+            lambda decision: submit_ioc_with_approval_workflow(
+                client,
+                decision,
+                event_id=event_id,
+                type=type,
+                value=value,
+                category=category,
+                comment=comment,
+                to_ids=to_ids,
+                approved=approved,
+            ),
+        )
+
+    async def add_sighting_with_approval(
+        value: str | None = None,
+        event_id: int | None = None,
+        attribute_id: str | None = None,
+        sighting_type: str = "0",
+        source: str | None = None,
+        approved: bool = False,
+    ) -> dict[str, object]:
+        """Add a sighting to MISP only when policy and approval allow. Otherwise returns a
+        blocked/proposal result."""
+        return await _audit_write_tool(
+            "add_sighting_with_approval",
+            Action.WRITE,
+            {
+                "value": value,
+                "event_id": event_id,
+                "attribute_id": attribute_id,
+                "sighting_type": sighting_type,
+                "source": source,
+                "approved": approved,
+            },
+            lambda decision: add_sighting_with_approval_workflow(
+                client,
+                decision,
+                value=value,
+                event_id=event_id,
+                attribute_id=attribute_id,
+                sighting_type=sighting_type,
+                source=source,
+                approved=approved,
+            ),
+        )
+
+    async def tag_event_with_approval(
+        event_id: int, tag: str, approved: bool = False
+    ) -> dict[str, object]:
+        """Tag a MISP event only when policy and approval allow. Otherwise returns a
+        blocked/proposal result."""
+        return await _audit_write_tool(
+            "tag_event_with_approval",
+            Action.WRITE,
+            {"event_id": event_id, "tag": tag, "approved": approved},
+            lambda decision: tag_event_with_approval_workflow(
+                client, decision, event_id=event_id, tag=tag, approved=approved
+            ),
+        )
+
+    async def publish_event_with_approval(
+        event_id: int, approved: bool = False
+    ) -> dict[str, object]:
+        """Publish a MISP event only when policy and approval allow. Requires curator/
+        admin-like permission and is always high-risk and approval-gated. Otherwise returns
+        a blocked/proposal result."""
+        return await _audit_write_tool(
+            "publish_event_with_approval",
+            Action.PUBLISH,
+            {"event_id": event_id, "approved": approved},
+            lambda decision: publish_event_with_approval_workflow(
+                client, decision, event_id=event_id, approved=approved
+            ),
+        )
+
     _register(mcp, "search_ioc", search_ioc)
     _register(mcp, "investigate_ioc", investigate_ioc)
     _register(mcp, "summarize_event", summarize_event)
@@ -199,3 +392,9 @@ def register_tools(
     _register(mcp, "generate_event_report", generate_event_report)
     _register(mcp, "generate_markdown_ioc_report", generate_markdown_ioc_report)
     _register(mcp, "generate_markdown_event_report", generate_markdown_event_report)
+    _register(mcp, "propose_event", propose_event)
+    _register(mcp, "propose_attribute", propose_attribute)
+    _register(mcp, "submit_ioc_with_approval", submit_ioc_with_approval)
+    _register(mcp, "add_sighting_with_approval", add_sighting_with_approval)
+    _register(mcp, "tag_event_with_approval", tag_event_with_approval)
+    _register(mcp, "publish_event_with_approval", publish_event_with_approval)

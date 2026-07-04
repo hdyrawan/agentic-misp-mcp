@@ -1,31 +1,54 @@
 # Security model
 
-This project is intentionally read-only, workflow-first, and in early development. It has not
-been validated against a live MISP instance and should not be treated as production-ready.
+This project is intentionally workflow-first and in early development. It has not been
+validated against a live MISP instance and should not be treated as production-ready.
 
-## Read-only boundary
+## Read-only by default; controlled write behind policy and approval
 
-The server does not implement event creation, attribute creation, sighting submission, tagging, publishing, raw MISP API proxying, write/admin tools, shell execution, or unrestricted filesystem access.
+The server ships read-only by default. Phase 8 adds exactly six controlled, policy-gated write
+tools (see below); no raw MISP API proxying, generic admin tools, shell execution, or
+unrestricted filesystem access are implemented, and none are planned.
 
-## Policy and approval foundation
+## Policy and approval enforcement
 
-Phase 7 adds policy enforcement primitives for future controlled-write workflows without adding
-write/admin MCP tools. The runtime policy environment variables are:
+Phase 7 added policy enforcement primitives; Phase 8 wires them into real, gated write
+workflows. The runtime policy environment variables are:
 
 - `AGENTIC_MISP_MCP_ROLE=read_only` by default. Supported roles are `read_only`,
   `analyst_write`, `curator`, and `admin`.
-- `AGENTIC_MISP_MCP_ENABLE_WRITE=false` by default. With write mode disabled, all future
-  `write`, `admin`, `sync`, and `dangerous` actions are blocked even for elevated roles.
-- `AGENTIC_MISP_MCP_REQUIRE_APPROVAL=true` by default. Future role-allowed write/admin/sync
-  actions require approval when this is enabled.
+- `AGENTIC_MISP_MCP_ENABLE_WRITE=false` by default. With write mode disabled, all `write` and
+  `publish` actions are blocked even for elevated roles, and `admin`/`dangerous` actions remain
+  unavailable regardless of this setting (no tool uses those action categories).
+- `AGENTIC_MISP_MCP_REQUIRE_APPROVAL=true` by default. Role-allowed write/publish actions
+  require explicit approval when this is enabled.
 
-The current 13 tools are classified as `read` and remain allowed under `read_only`. Approval
-request data models exist only as an in-memory foundation; Phase 7 does not add persistent
-approval storage and cannot execute approved writes.
+The original 13 read tools are classified as `read` and remain allowed under `read_only`.
+
+### Write tool behavior
+
+- `propose_event` and `propose_attribute` build a MISP event/attribute creation payload and
+  **never** write to MISP. They return the proposed payload, a risk level, the required role,
+  and whether approval would be required, plus a `blocked` status if the current
+  role/write-mode does not even allow proposing the write.
+- `submit_ioc_with_approval`, `add_sighting_with_approval`, `tag_event_with_approval`, and
+  `publish_event_with_approval` each accept an `approved: bool = False` argument (explicit
+  approval input). Each call returns one of:
+  - `blocked` — write mode disabled, or role does not permit the action. No MISP call is made.
+  - `pending_approval` — role permits the action but approval is required and `approved` was
+    not set. Returns a sanitized `ApprovalRequest` proposal. No MISP call is made.
+  - `executed` — role permits the action and (approval not required, or `approved=True` was
+    explicitly passed). Only in this branch is the corresponding MISP write method called.
+- `publish_event_with_approval` uses a dedicated `publish` policy action restricted to
+  `curator`/`admin` roles, is always classified `high` risk, and is always approval-gated when
+  `AGENTIC_MISP_MCP_REQUIRE_APPROVAL=true`.
+- No write ever happens silently: every branch above (including `blocked`) is audited, and only
+  the `executed` branch invokes a MISP write method (`create_event`, `add_attribute`,
+  `add_sighting`, `tag_event`, `publish_event` in `misp/client.py`). There is no generic request
+  proxy — each write tool maps to exactly one narrow MISP write method.
 
 ## MCP tool boundary
 
-Only these tools are exposed:
+Nineteen tools are exposed. The original 13 read-only tools:
 
 - `search_ioc`
 - `investigate_ioc`
@@ -41,7 +64,18 @@ Only these tools are exposed:
 - `generate_markdown_ioc_report`
 - `generate_markdown_event_report`
 
-All tools must be registered through `tools/registry.py` and audited through the shared audit wrapper.
+Plus six Phase 8 controlled write tools:
+
+- `propose_event`
+- `propose_attribute`
+- `submit_ioc_with_approval`
+- `add_sighting_with_approval`
+- `tag_event_with_approval`
+- `publish_event_with_approval`
+
+All tools must be registered through `tools/registry.py` and audited through the shared audit
+wrapper. There is no raw MISP API proxy tool, and no user/organisation/server/settings-style
+admin tools exist.
 
 ## Credential handling
 
@@ -87,7 +121,7 @@ LLM call is made to generate them.
 `read`/`write`/`admin`/`sync`/`dangerous`/`unknown` categories with a risk level and
 recommended role, to help plan future controlled-write work. It is a local, offline,
 read-only-of-the-spec-file operation: it does not call MISP, does not expose any MISP API
-endpoint as an MCP tool, and does not change the current read-only tool boundary above. See
+endpoint as an MCP tool, and does not change the tool boundary above. See
 `docs/openapi-inventory.md` for a generated sample.
 
 ## Warninglist behavior
