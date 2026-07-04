@@ -40,7 +40,8 @@ caller passes `approved=true` on that specific call.** Every other outcome is `b
 5. **Second call: same arguments, `approved=true`.** The agent re-invokes the exact same tool
    with the same business arguments plus `approved=true`. Policy is evaluated again (it is not
    cached from step 2). If still allowed, the tool now calls the real MISP write method and
-   returns `status: "executed"` with the MISP response.
+   returns `status: "executed"` with the MISP response — unless MISP itself rejected the
+   operation (see below), in which case the tool returns `status: "failed"` instead.
 6. **Audit logging.** Both calls (the `pending_approval` one and the `executed` one) produce
    independent JSONL audit records via `audit.py::audit_call`, each including the tool name,
    sanitized arguments (the `approved` boolean is logged; secrets like `MISP_API_KEY` never
@@ -48,6 +49,24 @@ caller passes `approved=true` on that specific call.** Every other outcome is `b
    duration, and error type/message if any. Reviewing the audit log after the fact shows both
    the proposal and the execution as two distinct, correlated entries (same tool name, same
    arguments except `approved`).
+
+### `executed` vs `failed`
+
+`tag_event_with_approval` and `publish_event_with_approval` call MISP endpoints
+(`/events/addTag/{id}`, `/events/publish/{id}`) that can answer HTTP 200 while rejecting the
+operation itself — MISP's response includes `saved`/`published: false` (for example an unknown
+tag name, or a publish MISP declined). The tool distinguishes this from a real write:
+
+- `status: "executed"` — MISP confirmed the write (`saved`/`published` was `true`).
+- `status: "failed"` — the MISP write method was called and did not raise, but MISP rejected the
+  operation. The `result` field still contains MISP's response (including its `message`, when
+  present) so the caller can see why.
+
+Both are audited distinctly too: `executed` is `outcome: "success"`, `failed` is
+`outcome: "failed"` (not `"success"` and not `"blocked"` — the policy allowed the call and MISP
+was actually reached, but the write did not take effect). Always check the tool's `status` field
+(and, if relevant, `result.saved`/`result.published`) rather than assuming a non-`blocked` write
+tool call means the data actually changed in MISP.
 
 ### What this flow intentionally does *not* do
 

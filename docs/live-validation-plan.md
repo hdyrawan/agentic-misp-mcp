@@ -1,9 +1,10 @@
 # Live MISP lab validation plan
 
-This is a checklist for the first live validation of `agentic-misp-mcp` against a real,
-non-production MISP instance. **No live validation has been performed yet** — this document is
-the plan, not a report. Do not run any of the controlled write checklist items against a shared
-or production MISP instance.
+This is a checklist for live validation of `agentic-misp-mcp` against a real, non-production
+MISP instance. This document is the plan and running checklist, not a full report — see
+`README.md`'s "Live lab validation status" table for a summary of what has passed so far. Read-only
+and policy-blocking items have been validated in stages; controlled writes remain unvalidated. Do
+not run any of the controlled write checklist items against a shared or production MISP instance.
 
 See [`docs/testing.md`](testing.md) for what the mocked test suite already covers, and
 [`docs/roles.md`](roles.md) / [`docs/approval-flow.md`](approval-flow.md) for the policy and
@@ -71,7 +72,8 @@ For each checklist item below, record:
 - [ ] `find_related_iocs` — confirm ranking and limit behavior against real related-IOC volume.
 - [ ] `extract_event_iocs` against an event with a mix of supported/unsupported attribute types.
 - [ ] `explain_event_context` against a tagged event (galaxy/threat-actor tags if available).
-- [ ] `find_events_by_tag` against a real, non-trivial tag.
+- [x] `find_events_by_tag` against a real, non-trivial tag. Validated 2026-07-04 via MCP
+      Inspector CLI against the lab, tag `OSINT`, returning 3 real events.
 
 ## 5. Large event / result-set testing
 
@@ -93,10 +95,14 @@ are exercised against something real.
       clear `MISPRateLimitError`-driven failure, not a hang or a silent empty result.
 - [ ] Set `MISP_TIMEOUT_SECONDS` low enough to trigger a real timeout against a slow/large
       request; confirm a clean, informative error rather than a crash.
-- [ ] Point `MISP_URL` at a wrong/unreachable host temporarily; confirm a clean connection-error
-      message.
-- [ ] Test with an invalid/revoked API key; confirm `MISPAuthenticationError` behavior matches
-      the mocked `401`/`403` expectations.
+- [x] Point `MISP_URL` at a wrong/unreachable host temporarily; confirm a clean connection-error
+      message. Validated 2026-07-04 via MCP Inspector CLI: `search_ioc` returned `isError: true`
+      with a clean `ConnectError` message, no crash; audit log recorded `outcome=error`,
+      `error_type=MISPClientError`.
+- [x] Test with an invalid/revoked API key; confirm `MISPAuthenticationError` behavior matches
+      the mocked `401`/`403` expectations. Validated 2026-07-04 via MCP Inspector CLI: `search_ioc`
+      returned a clean authentication error with no key echoed; audit log recorded
+      `outcome=error`, `error_type=MISPAuthenticationError`.
 - [ ] If feasible, test against a MISP TLS endpoint with an untrusted certificate with
       `MISP_VERIFY_TLS=true` (should fail closed) and document that `MISP_VERIFY_TLS=false` is
       lab-only and never for production.
@@ -122,18 +128,38 @@ instance, using a lab-only event/org. Follow the two-call approval flow describe
 - [ ] `propose_event` — confirm the proposed payload shape is a payload MISP would actually
       accept (cross-check field names/types against this MISP version's `/events/add`).
 - [ ] `propose_attribute` — same, against `/attributes/add/{event_id}`.
-- [ ] `submit_ioc_with_approval` with `AGENTIC_MISP_MCP_ROLE=analyst_write` — confirm
+- [x] `submit_ioc_with_approval` with `AGENTIC_MISP_MCP_ROLE=analyst_write`/`curator` — confirm
       `pending_approval` then `executed` against a real lab event, and confirm the created
-      attribute is visible in the MISP UI/API afterward.
-- [ ] `add_sighting_with_approval` — confirm a real sighting is recorded and queryable.
-- [ ] `tag_event_with_approval` — confirm the tag is actually attached to the event afterward.
-- [ ] `publish_event_with_approval` with `AGENTIC_MISP_MCP_ROLE=curator` (or `admin`) — confirm
+      attribute is visible in the MISP UI/API afterward. Validated 2026-07-04 via MCP Inspector
+      CLI against a dedicated sandbox event: attribute created and confirmed visible via
+      `search_ioc`. **Bug found and fixed:** a present-but-empty `AGENTIC_MISP_MCP_APPROVAL_TOKEN`
+      (e.g. `KEY=` in a `.env` file) was parsed as an empty-string token rather than "no token
+      configured," silently blocking every controlled-write execution with "approval token is
+      required or invalid." Fixed in `settings.py` by normalizing a blank/whitespace-only token
+      to `None`.
+- [x] `add_sighting_with_approval` — confirm a real sighting is recorded and queryable. Validated
+      2026-07-04: sighting recorded against the submitted attribute and visible in MISP.
+- [x] `tag_event_with_approval` — confirm the tag is actually attached to the event afterward.
+      Validated 2026-07-04. **Bug found and fixed:** MISP's `/events/addTag` answers HTTP 200
+      with `{"saved": false, "errors": "Invalid Tag."}` for an unrecognized tag name, but the
+      tool unconditionally reported `status: "executed"` regardless — confirmed via direct MISP
+      API query that the tag was never actually attached to the event. Fixed by adding a
+      `status: "failed"` result (and a matching `outcome: "failed"` audit entry, distinct from
+      `success`/`blocked`) when `result.saved`/`result.published` is false; re-verified with both
+      an invalid tag (`failed`) and a real tag `tlp:white` (`executed`, confirmed attached).
+- [x] `publish_event_with_approval` with `AGENTIC_MISP_MCP_ROLE=curator` (or `admin`) — confirm
       the event is actually published/visible to sync in the lab, and confirm `analyst_write`
-      is still blocked from this tool in the same lab.
-- [ ] Re-run the `read_only` and write-disabled blocking checks from `docs/roles.md` against the
+      is still blocked from this tool in the same lab. Validated 2026-07-04: `analyst_write`
+      correctly blocked (`allowed: false`); `curator` published the sandbox event successfully,
+      confirmed via direct MISP API (`published: true`). Same `executed`/`failed` distinction as
+      `tag_event_with_approval` applies here (`MISPPublishResult.published`).
+- [x] Re-run the `read_only` and write-disabled blocking checks from `docs/roles.md` against the
       live instance to confirm policy blocking behaves identically to the mocked tests — no
       write should ever happen when blocked, verified by checking the lab event afterward, not
-      just by trusting the tool's returned `status`.
+      just by trusting the tool's returned `status`. Validated 2026-07-04: `submit_ioc_with_approval`
+      correctly `blocked` under `read_only`/write-disabled (`client.calls` never reached, confirmed
+      via a follow-up `search_ioc` finding no such attribute); `publish_event_with_approval`
+      correctly `blocked` under `analyst_write` (no MISP call made, so no state to check).
 
 ## 9. Sign-off
 

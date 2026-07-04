@@ -7,6 +7,42 @@ live MISP compatibility testing is still pending.
 
 ## Unreleased
 
+### Controlled-write live validation and fixes (2026-07-04, follow-up)
+
+- Extended the MCP Inspector CLI live-lab validation to the controlled-write path
+  (`AGENTIC_MISP_MCP_ENABLE_WRITE=true`, `analyst_write`/`curator` roles) against a dedicated
+  sandbox event, exercising the full `pending_approval` → `approved=true` → `executed` flow for
+  `submit_ioc_with_approval`, `add_sighting_with_approval`, `tag_event_with_approval`, and
+  `publish_event_with_approval`, plus role-based blocking (`analyst_write` on publish).
+- **Fixed:** a present-but-empty `AGENTIC_MISP_MCP_APPROVAL_TOKEN` env var (e.g. `KEY=` in a
+  `.env` file) was parsed as a configured empty-string token rather than "no token configured,"
+  causing every controlled-write execution to be silently blocked with "approval token is
+  required or invalid" even though `config-check` correctly displayed it as "not set". Blank/
+  whitespace-only tokens now normalize to `None` in `settings.py`.
+- **Fixed:** `tag_event_with_approval` and `publish_event_with_approval` reported
+  `status: "executed"` even when MISP itself rejected the operation — `/events/addTag` and
+  `/events/publish` can answer HTTP 200 with `saved`/`published: false` (e.g. an unrecognized tag
+  name) without raising. Confirmed live: MISP never actually attached the tag despite the
+  `executed` response. Both tools now return a distinct `status: "failed"` when MISP rejects the
+  write, and `audit_call` records a matching `outcome: "failed"` (not `success`, not `blocked`) so
+  the audit trail doesn't claim success for a write MISP never applied.
+- Added regression tests: `test_settings.py::test_blank_approval_token_env_var_becomes_none`,
+  `test_controlled_write_tools.py::test_tag_event_reports_failed_when_misp_rejects_the_tag` /
+  `test_publish_event_reports_failed_when_misp_does_not_publish`, and
+  `test_audit.py::test_audit_tool_reported_failure_is_not_success`.
+
+### MCP Inspector CLI live validation (2026-07-04)
+
+- Ran a CLI-mode (non-browser) MCP Inspector integration pass against a live, non-production
+  MISP `2.5.42` lab: `tools/list`, live `search_ioc` / `find_events_by_tag` calls, a policy-blocking
+  check on `submit_ioc_with_approval`, and error-path checks for an unreachable `MISP_URL` and an
+  invalid `MISP_API_KEY`.
+- Confirmed audit records match the documented semantics exactly: blocked writes log
+  `success: false` / `outcome: "blocked"`; runtime failures (bad URL, bad key) log
+  `outcome: "error"` with no secret material in `error_message`.
+- No source changes were required; no bugs found. Controlled write tools and broader MISP
+  version compatibility remain the only pending items before wider production use.
+
 ### Fixed
 
 - Fixed audit records for blocked policy decisions (for example a write attempted while

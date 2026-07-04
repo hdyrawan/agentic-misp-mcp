@@ -67,6 +67,14 @@ class Settings(BaseSettings):
             raise ValueError("MISP_MAX_LIMIT must be >= 1")
         return value
 
+    @field_validator("approval_token")
+    @classmethod
+    def blank_approval_token_becomes_none(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        stripped = value.strip()
+        return stripped or None
+
     @model_validator(mode="after")
     def limits_must_be_consistent(self) -> Settings:
         if self.misp_default_limit > self.misp_max_limit:

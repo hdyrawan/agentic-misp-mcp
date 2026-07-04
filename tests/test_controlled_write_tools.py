@@ -73,6 +73,20 @@ class FakeWriteClient:
         return MISPPublishResult(event_id=event_id, published=True, message="ok")
 
 
+class FakeRejectingWriteClient(FakeWriteClient):
+    """MISP answers with HTTP 200 but rejects the operation itself (e.g. an unknown tag
+    name, or a publish that MISP silently refuses) — the `saved`/`published` shape found
+    during live lab validation on 2026-07-04."""
+
+    async def tag_event(self, event_id, tag):
+        self.calls.append(("tag_event", event_id, tag))
+        return MISPTagResult(event_id=event_id, tag=tag, saved=False, message="Invalid Tag.")
+
+    async def publish_event(self, event_id):
+        self.calls.append(("publish_event", event_id))
+        return MISPPublishResult(event_id=event_id, published=False, message="Job queued")
+
+
 def _settings(monkeypatch, tmp_path, **overrides):
     monkeypatch.setenv("MISP_URL", "https://misp.example.test")
     monkeypatch.setenv("MISP_API_KEY", "test-secret-key")
@@ -310,6 +324,44 @@ async def test_approved_path_calls_mocked_misp_write_method(monkeypatch, tmp_pat
 
     assert result["status"] == "executed"
     assert client.calls == [("add_sighting", {"type": "0", "value": "1.2.3.4"})]
+
+
+@pytest.mark.asyncio
+async def test_tag_event_reports_failed_when_misp_rejects_the_tag(monkeypatch, tmp_path):
+    """MISP can answer HTTP 200 with `saved: false` (e.g. an unknown tag name) without
+    raising. The tool must not report `executed` for a write that never actually applied."""
+    client = FakeRejectingWriteClient()
+    mcp, _, _ = _register(
+        monkeypatch,
+        tmp_path,
+        client=client,
+        AGENTIC_MISP_MCP_ROLE="analyst_write",
+        AGENTIC_MISP_MCP_ENABLE_WRITE="true",
+    )
+
+    result = await mcp.tools["tag_event_with_approval"](1, "not-a-real-tag", approved=True)
+
+    assert result["status"] == "failed"
+    assert result["result"]["saved"] is False
+    assert client.calls == [("tag_event", 1, "not-a-real-tag")]
+
+
+@pytest.mark.asyncio
+async def test_publish_event_reports_failed_when_misp_does_not_publish(monkeypatch, tmp_path):
+    client = FakeRejectingWriteClient()
+    mcp, _, _ = _register(
+        monkeypatch,
+        tmp_path,
+        client=client,
+        AGENTIC_MISP_MCP_ROLE="curator",
+        AGENTIC_MISP_MCP_ENABLE_WRITE="true",
+    )
+
+    result = await mcp.tools["publish_event_with_approval"](1, approved=True)
+
+    assert result["status"] == "failed"
+    assert result["result"]["published"] is False
+    assert client.calls == [("publish_event", 1)]
 
 
 @pytest.mark.asyncio

@@ -53,6 +53,19 @@ def test_settings_new_security_defaults(monkeypatch):
     assert settings.allow_insecure_http_bind is False
 
 
+def test_blank_approval_token_env_var_becomes_none(monkeypatch):
+    """A present-but-empty AGENTIC_MISP_MCP_APPROVAL_TOKEN (e.g. `KEY=` in a .env file) must
+    behave identically to the variable being unset, not as a configured empty-string token that
+    silently blocks every controlled-write execution."""
+    monkeypatch.setenv("MISP_URL", "https://misp.example.test")
+    monkeypatch.setenv("MISP_API_KEY", "secret")
+    monkeypatch.setenv("AGENTIC_MISP_MCP_APPROVAL_TOKEN", "")
+
+    settings = Settings()
+
+    assert settings.approval_token is None
+
+
 def test_validation_error_hides_misp_api_key_input(monkeypatch):
     secret = "do-not-leak-this-key"
     monkeypatch.setenv("MISP_URL", "https://misp.example.test")
