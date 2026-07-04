@@ -100,6 +100,39 @@ async def test_warninglist_not_available_on_404(settings):
 
 
 @pytest.mark.asyncio
+async def test_search_events_by_tag_parses_event_list(settings):
+    async def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.path == "/events/restSearch"
+        return httpx.Response(
+            200,
+            json={
+                "response": [
+                    {
+                        "Event": {
+                            "id": "1",
+                            "info": "tagged event",
+                            "Tag": [{"name": "malware:family=test"}],
+                            "Attribute": [{"type": "ip-dst", "value": "1.2.3.4"}],
+                        }
+                    }
+                ]
+            },
+        )
+
+    client = MISPClient(settings, transport=httpx.MockTransport(handler))
+    try:
+        events = await client.search_events_by_tag("malware:family=test", 20)
+    finally:
+        await client.aclose()
+
+    assert len(events) == 1
+    assert events[0].id == 1
+    assert events[0].tags == ["malware:family=test"]
+    assert events[0].attribute_count == 1
+    assert events[0].attributes == []
+
+
+@pytest.mark.asyncio
 async def test_not_found_normalized(settings):
     async def handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(404, json={})
