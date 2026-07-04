@@ -10,7 +10,9 @@ default — proposing and submitting controlled writes. It is **not** a raw MISP
 - **Early development.** APIs, tool output shapes, and internals may still change.
 - Tested with **mocked MISP responses only**. Live MISP compatibility testing is pending.
 - Write tools exist but are disabled by default (`AGENTIC_MISP_MCP_ENABLE_WRITE=false`) and are
-  policy/approval-gated when enabled. No generic admin tools or raw API proxy are implemented.
+  policy/approval-gated when enabled; approval is required by default
+  (`AGENTIC_MISP_MCP_REQUIRE_APPROVAL=true`). No generic admin tools or raw API proxy are
+  implemented.
 - Not yet recommended for production use.
 - CI runs lint, format checks, and the mocked test suite on Python 3.11 and 3.12.
 

@@ -7,6 +7,22 @@ live MISP compatibility testing is still pending.
 
 ## Unreleased
 
+### Phase 10 - Release readiness
+
+### Changed
+
+- Prepared repository documentation for safe public GitHub publishing as an early-development
+  open-source project.
+- Rechecked README, security policy, changelog, project state, packaging metadata, tracked-file
+  hygiene, and sensitive-content scan results.
+
+### Security
+
+- Confirmed no real MISP configuration, API keys, audit logs, local handoff notes, virtualenvs, or
+  cache directories are tracked.
+- Confirmed the secret scan only reports expected placeholders, test fixtures, environment variable
+  names, and generic security documentation.
+
 ### Phase 9 - Production hardening
 
 ### Added
