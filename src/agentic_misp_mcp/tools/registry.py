@@ -4,6 +4,7 @@ from typing import Any
 
 from agentic_misp_mcp.audit import AuditLogger, audit_call
 from agentic_misp_mcp.misp.client import MISPClient
+from agentic_misp_mcp.policy import Action, PolicyEngine, enforce_policy
 from agentic_misp_mcp.settings import Settings
 from agentic_misp_mcp.workflows.check_warninglists import check_warninglists_workflow
 from agentic_misp_mcp.workflows.explain_event_context import explain_event_context_workflow
@@ -59,9 +60,18 @@ def register_tools(
 ) -> None:
     """Register only approved v0.1-Phase 4 tools through the shared audit wrapper."""
 
+    policy_engine = PolicyEngine.from_settings(settings)
+
+    async def _audit_read_tool(
+        audit: AuditLogger, tool_name: str, arguments: dict[str, object], call: Any
+    ) -> Any:
+        decision = policy_engine.decide(tool_name=tool_name, action=Action.READ)
+        enforce_policy(decision)
+        return await audit_call(audit, tool_name, arguments, call, policy_decision=decision)
+
     async def search_ioc(value: str, limit: int = 20) -> dict[str, object]:
         """Search MISP for an IOC and return normalized attribute matches."""
-        return await audit_call(
+        return await _audit_read_tool(
             audit_logger,
             "search_ioc",
             {"value": value, "limit": limit},
@@ -70,7 +80,7 @@ def register_tools(
 
     async def investigate_ioc(value: str, limit: int = 20) -> dict[str, object]:
         """Investigate an IOC using MISP matches, related events, tags, and warninglists."""
-        return await audit_call(
+        return await _audit_read_tool(
             audit_logger,
             "investigate_ioc",
             {"value": value, "limit": limit},
@@ -79,7 +89,7 @@ def register_tools(
 
     async def summarize_event(event_id: int) -> dict[str, object]:
         """Summarize a MISP event without returning full raw event JSON."""
-        return await audit_call(
+        return await _audit_read_tool(
             audit_logger,
             "summarize_event",
             {"event_id": event_id},
@@ -88,7 +98,7 @@ def register_tools(
 
     async def check_warninglists(value: str) -> dict[str, object]:
         """Check an IOC against MISP warninglists when available."""
-        return await audit_call(
+        return await _audit_read_tool(
             audit_logger,
             "check_warninglists",
             {"value": value},
@@ -97,7 +107,7 @@ def register_tools(
 
     async def generate_ioc_report(value: str) -> dict[str, object]:
         """Generate a deterministic analyst report for an IOC."""
-        return await audit_call(
+        return await _audit_read_tool(
             audit_logger,
             "generate_ioc_report",
             {"value": value},
@@ -106,7 +116,7 @@ def register_tools(
 
     async def pivot_ioc(value: str, limit: int = 20) -> dict[str, object]:
         """Pivot from an IOC to related events and indicators useful for hunting."""
-        return await audit_call(
+        return await _audit_read_tool(
             audit_logger,
             "pivot_ioc",
             {"value": value, "limit": limit},
@@ -115,7 +125,7 @@ def register_tools(
 
     async def find_related_iocs(value: str, limit: int = 20) -> dict[str, object]:
         """Return a focused, ranked list of IOCs related to the given IOC."""
-        return await audit_call(
+        return await _audit_read_tool(
             audit_logger,
             "find_related_iocs",
             {"value": value, "limit": limit},
@@ -124,7 +134,7 @@ def register_tools(
 
     async def extract_event_iocs(event_id: int, limit: int = 100) -> dict[str, object]:
         """Extract supported IOC types from a MISP event, grouped and deduplicated."""
-        return await audit_call(
+        return await _audit_read_tool(
             audit_logger,
             "extract_event_iocs",
             {"event_id": event_id, "limit": limit},
@@ -133,7 +143,7 @@ def register_tools(
 
     async def explain_event_context(event_id: int) -> dict[str, object]:
         """Explain what a MISP event represents in deterministic, analyst-friendly language."""
-        return await audit_call(
+        return await _audit_read_tool(
             audit_logger,
             "explain_event_context",
             {"event_id": event_id},
@@ -142,7 +152,7 @@ def register_tools(
 
     async def find_events_by_tag(tag: str, limit: int = 20) -> dict[str, object]:
         """Find MISP events associated with a tag."""
-        return await audit_call(
+        return await _audit_read_tool(
             audit_logger,
             "find_events_by_tag",
             {"tag": tag, "limit": limit},
@@ -151,7 +161,7 @@ def register_tools(
 
     async def generate_event_report(event_id: int) -> dict[str, object]:
         """Generate a deterministic, structured analyst report for a MISP event."""
-        return await audit_call(
+        return await _audit_read_tool(
             audit_logger,
             "generate_event_report",
             {"event_id": event_id},
@@ -160,7 +170,7 @@ def register_tools(
 
     async def generate_markdown_ioc_report(value: str) -> str:
         """Generate a Markdown-formatted IOC report suitable for SOC documentation."""
-        return await audit_call(
+        return await _audit_read_tool(
             audit_logger,
             "generate_markdown_ioc_report",
             {"value": value},
@@ -169,7 +179,7 @@ def register_tools(
 
     async def generate_markdown_event_report(event_id: int) -> str:
         """Generate a Markdown-formatted MISP event report suitable for SOC escalation."""
-        return await audit_call(
+        return await _audit_read_tool(
             audit_logger,
             "generate_markdown_event_report",
             {"event_id": event_id},

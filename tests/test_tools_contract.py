@@ -56,6 +56,12 @@ async def test_exactly_thirteen_tools_registered_and_audited(settings, tmp_path)
     record = json.loads((tmp_path / "audit.jsonl").read_text().strip())
     assert record["tool"] == "search_ioc"
     assert record["success"] is True
+    assert record["policy"] == {
+        "action": "read",
+        "allowed": True,
+        "approval_required": False,
+        "role": "read_only",
+    }
 
 
 @pytest.mark.asyncio

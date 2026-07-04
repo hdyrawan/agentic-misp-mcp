@@ -35,6 +35,13 @@ class Settings(BaseSettings):
     log_level: Literal["CRITICAL", "ERROR", "WARNING", "INFO", "DEBUG"] = Field(
         default="INFO", validation_alias="AGENTIC_MISP_MCP_LOG_LEVEL"
     )
+    policy_role: Literal["read_only", "analyst_write", "curator", "admin"] = Field(
+        default="read_only", validation_alias="AGENTIC_MISP_MCP_ROLE"
+    )
+    enable_write: bool = Field(default=False, validation_alias="AGENTIC_MISP_MCP_ENABLE_WRITE")
+    require_approval: bool = Field(
+        default=True, validation_alias="AGENTIC_MISP_MCP_REQUIRE_APPROVAL"
+    )
 
     @field_validator("misp_api_key")
     @classmethod
