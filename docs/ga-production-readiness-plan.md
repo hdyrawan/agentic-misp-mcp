@@ -61,8 +61,10 @@ reconciled against what beta.2 actually closed:
    dependency-update process plus the three still-open scans are documented as explicit release
    checklist items in `docs/production-readiness.md`. The scans themselves are still not
    automated in CI.
-6. **A tagged release** with a finalized `CHANGELOG.md` entry — no git tag exists for this project
-   as of this document.
+6. **A tagged release** with a finalized `CHANGELOG.md` entry. `v0.2.0-beta.1` and
+   `v0.2.0-beta.2` are both tagged and pushed to `origin`; no tag exists yet for `v0.2.0-rc.1` or
+   any GA release, and this project does not tag/push a release as a side effect of implementation
+   work — tagging is a separate, explicitly requested step.
 
 ## Phased plan
 

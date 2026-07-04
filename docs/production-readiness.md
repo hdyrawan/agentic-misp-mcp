@@ -334,7 +334,8 @@ are true. Status reflects this document's date of writing; re-verify before rely
       documentation pass** — re-verify at actual release time, since docs can drift again as new
       work lands.
 - [ ] A release tag and `CHANGELOG.md` entry are prepared for the version being certified.
-      **Not yet done** — no git tag has been created for this project as of this document.
+      **Not yet done for a GA release** — `v0.2.0-beta.1` and `v0.2.0-beta.2` are tagged and
+      pushed to `origin`, but no tag exists yet for `v0.2.0-rc.1` or any GA-certified version.
 
 ## Not required for beta, required before GA
 
