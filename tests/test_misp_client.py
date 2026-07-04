@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+
 import httpx
 import pytest
 
@@ -143,3 +145,112 @@ async def test_not_found_normalized(settings):
             await client.get_event(999, attribute_limit=5)
     finally:
         await client.aclose()
+
+
+@pytest.mark.asyncio
+async def test_create_event_sends_payload_and_parses(settings):
+    seen = {}
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        seen["method"] = request.method
+        seen["path"] = request.url.path
+        seen["body"] = json.loads(request.content)
+        return httpx.Response(
+            200, json={"Event": {"id": "99", "info": "created event", "Attribute": []}}
+        )
+
+    client = MISPClient(settings, transport=httpx.MockTransport(handler))
+    try:
+        event = await client.create_event({"info": "created event", "distribution": 0})
+    finally:
+        await client.aclose()
+
+    assert seen == {
+        "method": "POST",
+        "path": "/events/add",
+        "body": {"info": "created event", "distribution": 0},
+    }
+    assert event.id == 99
+    assert event.info == "created event"
+
+
+@pytest.mark.asyncio
+async def test_add_attribute_sends_payload_and_parses(settings):
+    seen = {}
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        seen["path"] = request.url.path
+        seen["body"] = json.loads(request.content)
+        return httpx.Response(
+            200,
+            json={"Attribute": {"id": "5", "event_id": "42", "type": "ip-dst", "value": "1.2.3.4"}},
+        )
+
+    client = MISPClient(settings, transport=httpx.MockTransport(handler))
+    try:
+        attribute = await client.add_attribute(42, {"type": "ip-dst", "value": "1.2.3.4"})
+    finally:
+        await client.aclose()
+
+    assert seen == {
+        "path": "/attributes/add/42",
+        "body": {"type": "ip-dst", "value": "1.2.3.4"},
+    }
+    assert attribute.event_id == 42
+    assert attribute.value == "1.2.3.4"
+
+
+@pytest.mark.asyncio
+async def test_add_sighting_sends_payload_and_parses(settings):
+    async def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.path == "/sightings/add"
+        return httpx.Response(
+            200, json={"Sighting": {"id": "7", "value": "1.2.3.4", "type": "0", "event_id": "42"}}
+        )
+
+    client = MISPClient(settings, transport=httpx.MockTransport(handler))
+    try:
+        sighting = await client.add_sighting({"type": "0", "value": "1.2.3.4"})
+    finally:
+        await client.aclose()
+
+    assert sighting.value == "1.2.3.4"
+    assert sighting.event_id == 42
+
+
+@pytest.mark.asyncio
+async def test_tag_event_sends_payload_and_parses(settings):
+    seen = {}
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        seen["path"] = request.url.path
+        seen["body"] = json.loads(request.content)
+        return httpx.Response(200, json={"saved": True, "message": "Tag added"})
+
+    client = MISPClient(settings, transport=httpx.MockTransport(handler))
+    try:
+        result = await client.tag_event(42, "tlp:amber")
+    finally:
+        await client.aclose()
+
+    assert seen == {"path": "/events/addTag/42", "body": {"tag": "tlp:amber"}}
+    assert result.event_id == 42
+    assert result.tag == "tlp:amber"
+    assert result.saved is True
+
+
+@pytest.mark.asyncio
+async def test_publish_event_sends_request_and_parses(settings):
+    async def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.path == "/events/publish/42"
+        assert request.method == "POST"
+        return httpx.Response(200, json={"name": "Job queued", "message": "Job queued"})
+
+    client = MISPClient(settings, transport=httpx.MockTransport(handler))
+    try:
+        result = await client.publish_event(42)
+    finally:
+        await client.aclose()
+
+    assert result.event_id == 42
+    assert result.published is True

@@ -19,21 +19,39 @@ live MISP compatibility testing is still pending.
 - Added JSONL audit logging for MCP tool calls.
 - Added Docker and Docker Compose examples.
 - Added configuration and security documentation.
+- Added a policy/approval foundation (`policy/engine.py`, `policy/approvals.py`,
+  `policy/models.py`) with role, write-mode, and approval-requirement environment variables.
+- Added a MISP OpenAPI endpoint inventory/classifier CLI (`openapi-inventory`) for planning
+  future write scope. Classification-only; does not call MISP or expose new MCP tools.
+- Added six controlled, policy-gated write MCP tools, disabled by default
+  (`AGENTIC_MISP_MCP_ENABLE_WRITE=false`): `propose_event`, `propose_attribute` (proposal-only,
+  never write to MISP), and `submit_ioc_with_approval`, `add_sighting_with_approval`,
+  `tag_event_with_approval`, `publish_event_with_approval` (each executes only when write mode
+  is enabled, the configured role permits the action, and approval is satisfied — via an
+  explicit `approved=true` argument when `AGENTIC_MISP_MCP_REQUIRE_APPROVAL=true`). Every call,
+  including blocked and pending-approval outcomes, is audited.
+- Added a dedicated `publish` policy action requiring `curator`/`admin` role, always high-risk
+  and approval-gated.
+- Added narrow MISP write methods (`create_event`, `add_attribute`, `add_sighting`, `tag_event`,
+  `publish_event`) to `misp/client.py`. There is no generic write/request proxy.
 
 ### Changed
 
 - Stabilized analyst-oriented report outputs around deterministic JSON and Markdown schemas.
 - Improved IOC investigation with scoring, verdicts, related IOC extraction, tag-derived
   context, and recommended actions.
+- Tool count increased from 13 to 19 with the addition of the Phase 8 controlled write tools.
 
 ### Security
 
-- Kept the MCP server read-only by default.
-- No write, admin, publish, tagging, sighting submission, or raw MISP API proxy tools are
+- Kept the MCP server read-only by default; write tools require explicit opt-in via
+  `AGENTIC_MISP_MCP_ENABLE_WRITE=true` plus a role/approval-satisfying request.
+- No raw MISP API proxy or generic user/organisation/server/settings-style admin tools are
   implemented.
 - MISP API key is loaded only from environment variables.
 - TLS verification is enabled by default.
-- Tool calls are audited without logging secrets.
+- Tool calls are audited without logging secrets, including policy decision fields and
+  sanitized approval proposals for write tools.
 
 ### Known limitations
 
@@ -42,3 +60,5 @@ live MISP compatibility testing is still pending.
 - Warninglist endpoint behavior may vary by MISP version.
 - Galaxy/Object parsing is currently tag-derived and does not fully parse nested MISP
   Galaxy/Object structures.
+- Approval decisions are enforced per-call via the `approved` argument and are not persisted
+  across process restarts.

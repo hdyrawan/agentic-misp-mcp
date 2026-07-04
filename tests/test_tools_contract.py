@@ -42,12 +42,12 @@ class FakeClient:
 
 
 @pytest.mark.asyncio
-async def test_exactly_thirteen_tools_registered_and_audited(settings, tmp_path):
+async def test_exactly_nineteen_tools_registered_and_audited(settings, tmp_path):
     mcp = FakeMCP()
     audit = AuditLogger(tmp_path / "audit.jsonl")
     register_tools(mcp, client=FakeClient(), settings=settings, audit_logger=audit)
 
-    assert len(ALLOWED_TOOL_NAMES) == 13
+    assert len(ALLOWED_TOOL_NAMES) == 19
     assert set(mcp.tools) == ALLOWED_TOOL_NAMES
 
     result = await mcp.tools["search_ioc"]("1.2.3.4", 20)
@@ -65,20 +65,26 @@ async def test_exactly_thirteen_tools_registered_and_audited(settings, tmp_path)
 
 
 @pytest.mark.asyncio
-async def test_no_write_admin_or_raw_proxy_tools_exist(settings, tmp_path):
+async def test_no_raw_proxy_or_admin_tools_exist(settings, tmp_path):
     mcp = FakeMCP()
     audit = AuditLogger(tmp_path / "audit.jsonl")
     register_tools(mcp, client=FakeClient(), settings=settings, audit_logger=audit)
 
+    # No raw MISP API proxy, and no user/org/server/settings-style admin tools. The six
+    # Phase 8 controlled write tools (propose_event, propose_attribute,
+    # submit_ioc_with_approval, add_sighting_with_approval, tag_event_with_approval,
+    # publish_event_with_approval) are intentionally allowed here.
     forbidden_substrings = (
         "raw",
         "proxy",
-        "create",
-        "delete",
-        "publish",
-        "tag_event",
-        "sighting",
         "admin",
+        "organisation",
+        "organization",
+        "server",
+        "setting",
+        "authkey",
+        "auth_key",
+        "dangerous",
     )
     for name in mcp.tools:
         lowered = name.lower()

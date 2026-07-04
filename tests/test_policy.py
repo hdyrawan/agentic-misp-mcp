@@ -24,7 +24,7 @@ def test_read_only_allows_current_read_only_tools():
 def test_read_only_blocks_non_read_actions():
     engine = PolicyEngine(role=Role.READ_ONLY, enable_write=True, require_approval=True)
 
-    for action in (Action.WRITE, Action.ADMIN, Action.SYNC, Action.DANGEROUS):
+    for action in (Action.WRITE, Action.PUBLISH, Action.ADMIN, Action.SYNC, Action.DANGEROUS):
         decision = engine.decide(tool_name=f"future_{action.value}_tool", action=action)
 
         assert decision.allowed is False
@@ -58,6 +58,34 @@ def test_admin_requires_approval_for_admin_actions():
 
     assert decision.allowed is True
     assert decision.approval_required is True
+
+
+@pytest.mark.parametrize("role", [Role.CURATOR, Role.ADMIN])
+def test_curator_and_admin_require_approval_for_publish_actions(role: Role):
+    engine = PolicyEngine(role=role, enable_write=True, require_approval=True)
+
+    decision = engine.decide(tool_name="publish_event_with_approval", action=Action.PUBLISH)
+
+    assert decision.allowed is True
+    assert decision.approval_required is True
+
+
+def test_analyst_write_cannot_publish():
+    engine = PolicyEngine(role=Role.ANALYST_WRITE, enable_write=True, require_approval=True)
+
+    decision = engine.decide(tool_name="publish_event_with_approval", action=Action.PUBLISH)
+
+    assert decision.allowed is False
+    assert decision.approval_required is False
+
+
+def test_dangerous_actions_never_allowed_even_for_admin():
+    engine = PolicyEngine(role=Role.ADMIN, enable_write=True, require_approval=True)
+
+    decision = engine.decide(tool_name="future_dangerous_tool", action=Action.DANGEROUS)
+
+    assert decision.allowed is False
+    assert decision.approval_required is False
 
 
 @pytest.mark.parametrize("role", [Role.ANALYST_WRITE, Role.ADMIN])

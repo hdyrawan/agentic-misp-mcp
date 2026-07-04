@@ -16,9 +16,9 @@ configuration without connecting to MISP.
 | `MISP_RELATED_EVENT_LIMIT` | No | `5` | Maximum related events expanded by investigation workflows. Must be between `0` and `100`. |
 | `AGENTIC_MISP_MCP_AUDIT_LOG_PATH` | No | `./logs/audit.jsonl` | JSONL audit log path. Parent directory must be writable or creatable. |
 | `AGENTIC_MISP_MCP_LOG_LEVEL` | No | `INFO` | Application log level. |
-| `AGENTIC_MISP_MCP_ROLE` | No | `read_only` | Policy role: `read_only`, `analyst_write`, `curator`, or `admin`. Phase 7 still exposes read-only tools only. |
-| `AGENTIC_MISP_MCP_ENABLE_WRITE` | No | `false` | Future write-mode gate. Keep `false`; Phase 7 does not implement write tools. |
-| `AGENTIC_MISP_MCP_REQUIRE_APPROVAL` | No | `true` | Require approval for future controlled write/admin/sync actions when enabled and role-allowed. |
+| `AGENTIC_MISP_MCP_ROLE` | No | `read_only` | Policy role: `read_only`, `analyst_write`, `curator`, or `admin`. `analyst_write` (or higher) is required for `submit_ioc_with_approval`, `add_sighting_with_approval`, and `tag_event_with_approval`; `curator`/`admin` is required for `publish_event_with_approval`. |
+| `AGENTIC_MISP_MCP_ENABLE_WRITE` | No | `false` | Write-mode gate. Keep `false` to block all six controlled write tools regardless of role. |
+| `AGENTIC_MISP_MCP_REQUIRE_APPROVAL` | No | `true` | Require an explicit `approved=true` argument for controlled write/publish actions when enabled and role-allowed. |
 
 ## Example `.env`
 
@@ -38,14 +38,17 @@ AGENTIC_MISP_MCP_ENABLE_WRITE=false
 AGENTIC_MISP_MCP_REQUIRE_APPROVAL=true
 ```
 
-## Policy foundation
+## Policy and controlled write behavior
 
-Phase 7 adds a reusable policy and approval foundation for future controlled-write workflows,
-but the MCP server remains read-only. The current 13 MCP tools are classified as `read` and are
-allowed under the default `read_only` role. Future `write`, `admin`, `sync`, and `dangerous`
-actions are blocked unless write mode is explicitly enabled and the configured role permits the
-action. Approval decisions are modeled and audited, but no persistent approval storage or write
-execution exists yet.
+The original 13 MCP tools are classified as `read` and are always allowed under the default
+`read_only` role. Six additional Phase 8 write tools (`propose_event`, `propose_attribute`,
+`submit_ioc_with_approval`, `add_sighting_with_approval`, `tag_event_with_approval`,
+`publish_event_with_approval`) are blocked unless `AGENTIC_MISP_MCP_ENABLE_WRITE=true` and the
+configured role permits the action. When approval is required (the default), the four
+`_with_approval` tools return a `pending_approval` proposal until called again with
+`approved=true`; only that approved call invokes a real (mocked-in-tests) MISP write method.
+`propose_event`/`propose_attribute` never call MISP regardless of approval. Approval decisions
+are modeled and fully audited; there is no persistent approval storage across process restarts.
 
 ## Validate configuration
 
