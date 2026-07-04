@@ -120,7 +120,7 @@ class PolicyEngine:
             action=action_value,
             allowed=False,
             approval_required=False,
-            reason="dangerous actions are not executable in the Phase 7 policy foundation",
+            reason="dangerous actions are not executable in the policy foundation",
         )
 
     def _decision(

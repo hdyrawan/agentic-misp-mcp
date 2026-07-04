@@ -1,6 +1,8 @@
 # Configuration
 
-`agentic-misp-mcp` is configured entirely through environment variables. Run
+`agentic-misp-mcp` is configured entirely through environment variables. MISP connection
+variables use the `MISP_*` prefix; server policy, audit, transport, and hardening variables use
+the `AGENTIC_MISP_MCP_*` prefix. Run
 `agentic-misp-mcp config-check` before starting the MCP server to validate local runtime
 configuration without connecting to MISP. The project is distributed under the MIT License.
 
@@ -19,6 +21,9 @@ configuration without connecting to MISP. The project is distributed under the M
 | `AGENTIC_MISP_MCP_ROLE` | No | `read_only` | Policy role: `read_only`, `analyst_write`, `curator`, or `admin`. `analyst_write` (or higher) is required for `submit_ioc_with_approval`, `add_sighting_with_approval`, and `tag_event_with_approval`; `curator`/`admin` is required for `publish_event_with_approval`. |
 | `AGENTIC_MISP_MCP_ENABLE_WRITE` | No | `false` | Write-mode gate. Keep `false` to block all six controlled write tools regardless of role. |
 | `AGENTIC_MISP_MCP_REQUIRE_APPROVAL` | No | `true` | Require an explicit `approved=true` argument for controlled write/publish actions when enabled and role-allowed. |
+| `AGENTIC_MISP_MCP_APPROVAL_TOKEN` | No | unset | Optional approval-token enforcement. When set and approval is required, `approved=true` calls must also include the matching `approval_token`. The token is redacted from audit logs and config-check output. |
+| `AGENTIC_MISP_MCP_MAX_RESPONSE_BYTES` | No | `5242880` | Maximum MISP HTTP response body size. Checked before JSON parsing using both `Content-Length` and actual bytes read. |
+| `AGENTIC_MISP_MCP_ALLOW_INSECURE_HTTP_BIND` | No | `false` | Permit experimental HTTP transport to bind `0.0.0.0`. Leave false unless the server is behind an authenticated TLS-terminating gateway. |
 
 ## Example `.env`
 
@@ -36,6 +41,9 @@ AGENTIC_MISP_MCP_LOG_LEVEL=INFO
 AGENTIC_MISP_MCP_ROLE=read_only
 AGENTIC_MISP_MCP_ENABLE_WRITE=false
 AGENTIC_MISP_MCP_REQUIRE_APPROVAL=true
+AGENTIC_MISP_MCP_APPROVAL_TOKEN=
+AGENTIC_MISP_MCP_MAX_RESPONSE_BYTES=5242880
+AGENTIC_MISP_MCP_ALLOW_INSECURE_HTTP_BIND=false
 ```
 
 ## Policy and controlled write behavior
@@ -47,6 +55,9 @@ The original 13 MCP tools are classified as `read` and are always allowed under 
 configured role permits the action. When approval is required (the default), the four
 `_with_approval` tools return a `pending_approval` proposal until called again with
 `approved=true`; only that approved call invokes a real (mocked-in-tests) MISP write method.
+When `AGENTIC_MISP_MCP_APPROVAL_TOKEN` is set, a role-allowed approved call must also include a
+matching `approval_token`; missing or incorrect tokens return `blocked`. If the environment token
+is unset, the older `approved=true` behavior is preserved for backward compatibility.
 `propose_event`/`propose_attribute` never call MISP regardless of approval. Approval decisions
 are modeled and fully audited; there is no persistent approval storage across process restarts.
 
@@ -56,8 +67,9 @@ Production-oriented runtime guidance:
 - Keep `AGENTIC_MISP_MCP_ENABLE_WRITE=false` for read-only deployments. Setting it to `true`
   only unlocks the policy engine; role and approval checks still apply.
 - Keep `AGENTIC_MISP_MCP_REQUIRE_APPROVAL=true` for any deployment that enables writes.
-- Do not pass approval arguments automatically from an untrusted agent loop. `approved=true`
-  should represent an explicit operator-approved action.
+- Do not pass approval arguments automatically from an untrusted agent loop. `approved=true` is a
+  programmatic gate, not a complete HITL approval mechanism. For autonomous agents, set
+  `AGENTIC_MISP_MCP_APPROVAL_TOKEN` and keep the token outside the agent's normal prompt/context.
 - `MISP_API_KEY` must remain environment-only and must not be supplied through MCP tool
   arguments, CI variables for tests, committed config, or Docker image layers.
 
@@ -85,14 +97,15 @@ HTTP mode is intentionally minimal and depends on the installed FastMCP runtime 
 straightforward HTTP transport arguments.
 
 ```bash
-agentic-misp-mcp --transport http --host 0.0.0.0 --port 8000
+agentic-misp-mcp --transport http --host 127.0.0.1 --port 8000
 ```
 
 Use stdio if your MCP client or FastMCP version does not support HTTP mode.
 
-Do not expose HTTP mode directly to untrusted networks. If HTTP mode is required, bind to a
-trusted interface or place it behind an authenticated, TLS-terminating gateway and monitor audit
-logs closely.
+Do not expose HTTP mode directly to untrusted networks. Binding HTTP to `0.0.0.0` is blocked by
+default because this mode has no built-in auth/TLS. Only set
+`AGENTIC_MISP_MCP_ALLOW_INSECURE_HTTP_BIND=true` when the listener is behind an authenticated,
+TLS-terminating gateway and audit logs are monitored closely.
 
 ## Docker run
 

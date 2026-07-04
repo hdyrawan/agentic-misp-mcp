@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from agentic_misp_mcp.misp.client import MISPClient
+from agentic_misp_mcp.security.sanitization import safe_error_message
 from agentic_misp_mcp.settings import Settings
 
 THREAT_LEVEL_LABELS = {
@@ -42,7 +43,9 @@ async def expand_related_events(
                 event_id, attribute_limit=settings.misp_event_attribute_limit
             )
         except Exception as exc:  # noqa: BLE001 - preserve partial context on per-event failure.
-            related_events.append({"id": event_id, "status": "error", "message": str(exc)})
+            related_events.append(
+                {"id": event_id, "status": "error", "message": safe_error_message(exc)}
+            )
             continue
         related_events.append(
             {

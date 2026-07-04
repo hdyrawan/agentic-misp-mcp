@@ -51,6 +51,19 @@ def _blocked_result(tool_name: str, decision: PolicyDecision) -> dict[str, Any]:
     }
 
 
+def _approval_token_blocked_result(tool_name: str, decision: PolicyDecision) -> dict[str, Any]:
+    safe_decision = decision.model_copy(update={"reason": "approval token is required or invalid"})
+    return _blocked_result(tool_name, safe_decision)
+
+
+def _approval_token_allows_execution(
+    *, expected_approval_token: str | None, approval_token: str | None
+) -> bool:
+    if expected_approval_token is None:
+        return True
+    return approval_token == expected_approval_token
+
+
 def _proposal_result(
     tool_name: str, decision: PolicyDecision, proposed_payload: dict[str, Any]
 ) -> dict[str, Any]:
@@ -150,6 +163,8 @@ async def submit_ioc_with_approval_workflow(
     comment: str | None,
     to_ids: bool | None,
     approved: bool,
+    approval_token: str | None = None,
+    expected_approval_token: str | None = None,
 ) -> dict[str, Any]:
     """Submit an IOC (attribute) only when write is enabled, role allows it, and approval
     (when required) has been explicitly given. Otherwise returns a blocked/proposal result."""
@@ -162,6 +177,10 @@ async def submit_ioc_with_approval_workflow(
     proposed_arguments = {**payload, "event_id": event_id}
     if decision.approval_required and not approved:
         return _pending_approval_result(tool_name, decision, proposed_arguments=proposed_arguments)
+    if decision.approval_required and not _approval_token_allows_execution(
+        expected_approval_token=expected_approval_token, approval_token=approval_token
+    ):
+        return _approval_token_blocked_result(tool_name, decision)
     result = await client.add_attribute(event_id, payload)
     return _executed_result(tool_name, decision, result)
 
@@ -176,6 +195,8 @@ async def add_sighting_with_approval_workflow(
     sighting_type: str,
     source: str | None,
     approved: bool,
+    approval_token: str | None = None,
+    expected_approval_token: str | None = None,
 ) -> dict[str, Any]:
     """Add a sighting only when policy and approval allow. Otherwise returns a
     blocked/proposal result."""
@@ -191,6 +212,10 @@ async def add_sighting_with_approval_workflow(
     )
     if decision.approval_required and not approved:
         return _pending_approval_result(tool_name, decision, proposed_arguments=payload)
+    if decision.approval_required and not _approval_token_allows_execution(
+        expected_approval_token=expected_approval_token, approval_token=approval_token
+    ):
+        return _approval_token_blocked_result(tool_name, decision)
     result = await client.add_sighting(payload)
     return _executed_result(tool_name, decision, result)
 
@@ -202,6 +227,8 @@ async def tag_event_with_approval_workflow(
     event_id: int,
     tag: str,
     approved: bool,
+    approval_token: str | None = None,
+    expected_approval_token: str | None = None,
 ) -> dict[str, Any]:
     """Tag an event only when policy and approval allow. Otherwise returns a
     blocked/proposal result."""
@@ -211,6 +238,10 @@ async def tag_event_with_approval_workflow(
     proposed_arguments = {"event_id": event_id, "tag": tag}
     if decision.approval_required and not approved:
         return _pending_approval_result(tool_name, decision, proposed_arguments=proposed_arguments)
+    if decision.approval_required and not _approval_token_allows_execution(
+        expected_approval_token=expected_approval_token, approval_token=approval_token
+    ):
+        return _approval_token_blocked_result(tool_name, decision)
     result = await client.tag_event(event_id, tag)
     return _executed_result(tool_name, decision, result)
 
@@ -221,6 +252,8 @@ async def publish_event_with_approval_workflow(
     *,
     event_id: int,
     approved: bool,
+    approval_token: str | None = None,
+    expected_approval_token: str | None = None,
 ) -> dict[str, Any]:
     """Publish an event only when policy and approval allow. Requires curator/admin-like
     permission and is always high-risk and approval-gated. Otherwise returns a blocked/
@@ -231,5 +264,9 @@ async def publish_event_with_approval_workflow(
     proposed_arguments = {"event_id": event_id}
     if decision.approval_required and not approved:
         return _pending_approval_result(tool_name, decision, proposed_arguments=proposed_arguments)
+    if decision.approval_required and not _approval_token_allows_execution(
+        expected_approval_token=expected_approval_token, approval_token=approval_token
+    ):
+        return _approval_token_blocked_result(tool_name, decision)
     result = await client.publish_event(event_id)
     return _executed_result(tool_name, decision, result)

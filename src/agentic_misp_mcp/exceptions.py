@@ -22,5 +22,9 @@ class MISPNotFoundError(MISPClientError):
     """Requested MISP resource was not found."""
 
 
+class MISPResponseTooLargeError(MISPClientError):
+    """MISP response exceeded the configured maximum response size."""
+
+
 class WorkflowError(AgenticMispMCPError):
     """Workflow execution failed."""
