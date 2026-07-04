@@ -1,5 +1,8 @@
 # Controlled write approval flow
 
+This page documents both approval modes. The historical `approved=true` flow below is **lab mode** (`AGENTIC_MISP_MCP_APPROVAL_MODE=lab`, the default). The `v0.2.0-beta.1` production-write beta candidate on `main` adds production approval mode, where `approved=true` alone is never sufficient and the caller must redeem a CLI-approved `approval_request_id`.
+
+
 This document describes exactly how the four `_with_approval` MCP tools
 (`submit_ioc_with_approval`, `add_sighting_with_approval`, `tag_event_with_approval`,
 `publish_event_with_approval`) behave, so an agent (or a human reading its output) knows what to
@@ -9,11 +12,9 @@ flow; see `docs/security.md` and `docs/roles.md` for those two.
 
 ## The contract in one sentence
 
-**A write tool only calls MISP when the configured role/write-mode allow the action _and_ the
-caller passes `approved=true` on that specific call.** Every other outcome is `blocked` or
-`pending_approval`, and every outcome — including `blocked` — is audited.
+**Lab mode:** a write tool only calls MISP when the configured role/write-mode allow the action _and_ the caller passes `approved=true` on that specific call. **Production mode:** `approved=true` alone is blocked; a write tool only calls MISP when the configured role/write-mode allow the action and the caller redeems a CLI-approved, one-time-use, unexpired `approval_request_id` bound to the same tool and operation hash. Every other outcome is `blocked` or `pending_approval`, and every outcome — including `blocked` — is audited.
 
-## Step by step
+## Lab mode step by step
 
 1. **First call: `approved=false` (the default).** The agent calls a write tool with its normal
    arguments and does not set `approved` (or explicitly sets it to `false`). This is the safe
@@ -68,13 +69,9 @@ was actually reached, but the write did not take effect). Always check the tool'
 (and, if relevant, `result.saved`/`result.published`) rather than assuming a non-`blocked` write
 tool call means the data actually changed in MISP.
 
-### What this flow intentionally does *not* do
+### What lab mode intentionally does *not* do
 
-- **No persisted approval store.** The `request_id` on an `ApprovalRequest` is generated fresh
-  each time and is not checked or redeemed on the follow-up call — the follow-up call is
-  authorized purely by policy + the `approved=true` argument on that call, not by referencing
-  the earlier `request_id`. Do not build tooling that assumes `request_id` round-trips or
-  expires.
+- **No persisted approval store in lab mode.** The `request_id` on a lab-mode `ApprovalRequest` is generated fresh each time and is not checked or redeemed on the follow-up call — the follow-up call is authorized purely by policy + the `approved=true` argument on that call, not by referencing the earlier `request_id`. Do not build production tooling around lab-mode `request_id` round-trips. Production approval mode is different: it uses a persisted `approval_request_id` in SQLite, approved/rejected by CLI only, with TTL, one-time redemption, same-tool checks, and exact operation-hash binding.
 - **No multi-approver workflow.** Whoever can call the tool with `approved=true` can approve.
   There is no separate "who approved this" identity captured beyond the audit log's caller
   context (which is whatever the MCP host records).

@@ -87,8 +87,8 @@ sufficient for production use. Before considering controlled writes for any real
 - The MISP API key used for controlled writes must belong to a lab-scoped or otherwise
   blast-radius-limited MISP organisation/role — never a key with broad production MISP
   permissions, even once this project's own tool boundary is trusted.
-- Audit logs for `outcome: "blocked"` and `outcome: "failed"` should be actively monitored (see
-  "Audit logging and SIEM forwarding guidance" below), since both indicate either a
+- Audit logs for `outcome: "blocked"` and `outcome: "failed"` should be manually reviewed during
+  beta validation (see "Audit logging and manual review guidance" below), since both indicate either a
   misconfiguration or MISP rejecting a write the tool believed was valid.
 - A rollback/incident-response plan should exist for a bad controlled write (a mistaken
   attribute, sighting, tag, or published event) before enabling writes against anything that
@@ -153,7 +153,7 @@ reference.
 - Docker images must never bake in `MISP_URL` or `MISP_API_KEY`; pass them at runtime only (via
   `--env-file`, orchestrator secrets, or an equivalent runtime secret store).
 
-## Audit logging and SIEM forwarding guidance
+## Audit logging and manual review guidance
 
 Every MCP tool call writes one JSONL audit record. As of this document, the possible `outcome`
 values are:
@@ -171,13 +171,9 @@ Audit records include the tool name, sanitized arguments, policy decision fields
 applicable. They never include authorization headers, API keys, approval tokens, authkeys,
 cookies, passwords, or raw backend response bodies.
 
-For production use:
+For beta use:
 
-- **Forward the audit log to your SIEM or centralized logging pipeline.** This project does not
-  ship a built-in forwarder; use a standard log-shipping agent (for example Filebeat, Fluent Bit,
-  or an equivalent) tailing the JSONL file, or mount the log volume into your existing logging
-  infrastructure.
-- **Alert on `outcome: "blocked"` and `outcome: "failed"`.** A blocked write in a deployment that
+- **Manually review `outcome: "blocked"` and `outcome: "failed"`.** A blocked write in a deployment that
   is not expected to attempt writes (a `read_only` deployment) indicates either a
   misconfiguration or a caller attempting an out-of-scope action. A `failed` write indicates MISP
   rejected an operation the tool believed was policy-valid and worth investigating.
@@ -186,7 +182,30 @@ For production use:
   equivalent, and ensure rotation does not race with the audit logger's append-only writes.
 - **Treat the audit log itself as sensitive.** It contains sanitized arguments (IOC values, event
   IDs, tags) that may be sensitive in your environment even though secrets are redacted; apply
-  the same access controls you would to any SOC-relevant log source.
+  appropriate local file permissions and access controls.
+
+## Production deployment hardening checklist
+
+Use separate deployments per role rather than one broad deployment that can do everything:
+
+- [ ] **Read-only deployment:** `AGENTIC_MISP_MCP_ROLE=read_only` and `AGENTIC_MISP_MCP_ENABLE_WRITE=false`.
+- [ ] **Analyst-write deployment:** `AGENTIC_MISP_MCP_ROLE=analyst_write`, write enabled only for scoped pilot use, `AGENTIC_MISP_MCP_APPROVAL_MODE=production`, and publish disabled.
+- [ ] **Curator/publish deployment:** separate curator/admin deployment for publish pilots only; keep `AGENTIC_MISP_MCP_ENABLE_PUBLISH=false` until the explicit publish validation window.
+- [ ] Use **separate MISP API keys per deployment** so read-only, analyst-write, and curator/publish blast radii are isolated.
+- [ ] Use **least-privilege MISP API keys** for each role; never give this server a broad admin key when the deployment only needs read or analyst write.
+- [ ] Set `AGENTIC_MISP_MCP_APPROVAL_MODE=production` for every write-capable deployment.
+- [ ] Set `AGENTIC_MISP_MCP_ENABLE_WRITE=false` for read-only deployments.
+- [ ] Keep `AGENTIC_MISP_MCP_ENABLE_PUBLISH=false` by default; enable it only for a separate curator/admin publish deployment after explicit sign-off.
+- [ ] Configure explicit production write allowlists: `AGENTIC_MISP_MCP_ALLOWED_ATTRIBUTE_TYPES`, `AGENTIC_MISP_MCP_ALLOWED_ATTRIBUTE_CATEGORIES`, and `AGENTIC_MISP_MCP_ALLOWED_TAGS`.
+- [ ] Run the container/runtime as non-root.
+- [ ] Provide secrets at runtime only (orchestrator secret, private env file, or equivalent); never bake secrets into images or commits.
+- [ ] Mount a persistent audit-log volume.
+- [ ] Mount a persistent approval-store volume for production approval mode.
+- [ ] Enforce strict file permissions for the audit log path and approval DB: the runtime user can append/use them, but they are not group/world writable.
+- [ ] Ensure the LLM/agent process has **no shell access to the approval CLI** (`agentic-misp-mcp approvals ...`).
+- [ ] Ensure the LLM/agent process has **no direct write access to the approval DB** beyond the server's controlled creation/redeem path; the approval operator boundary must be a separate OS/process boundary.
+- [ ] Keep audit logs manually reviewable for beta validation.
+- [ ] Manually review blocked/failed production approval outcomes, especially replay/already-used, hash-mismatch, wrong-tool, rejected, expired, not-found, and publish/allowlist blocks.
 
 ## Docker hardening checklist
 
@@ -212,8 +231,9 @@ For production use:
 
 ## Live validation checklist
 
-Full evidence and checklist state live in
-[`docs/live-validation-plan.md`](live-validation-plan.md); this is a condensed status summary.
+Full completed lab-validation evidence lives in
+[`docs/live-validation-plan.md`](live-validation-plan.md). The `v0.2.0-beta.1` live beta sign-off checklist lives in
+[`docs/live-beta-validation-v0.2.0-beta.1.md`](live-beta-validation-v0.2.0-beta.1.md). This is a condensed status summary.
 
 Passed:
 
@@ -263,6 +283,21 @@ are true. Status reflects this document's date of writing; re-verify before rely
 - [ ] A release tag and `CHANGELOG.md` entry are prepared for the version being certified.
       **Not yet done** — no git tag has been created for this project as of this document.
 
+## Not required for beta, required before GA
+
+The following items are **not required** to run the `v0.2.0-beta.1` isolated live beta validation, but they are required before any GA production-readiness claim:
+
+- [ ] Add a stronger config doctor/config-check that validates production approval-mode combinations, approval-store permissions, publish split-deployment expectations, and allowlist coverage.
+- [ ] Add an approval DB pruning/vacuum command for expired/used/rejected records, with safe retention guidance.
+- [ ] Strengthen approval-operator separation beyond filesystem permissions, for example documented separate users/hosts or an operator-only administrative container.
+- [ ] Build and publish a MISP version compatibility matrix covering warninglists, event shapes, attribute/sighting/tag/publish response shapes, and error behavior.
+- [ ] Write a rollback playbook for mistaken writes, including MISP UI/API steps outside this project because the MCP server intentionally has no delete/unpublish/retract tools.
+- [ ] Add container image scanning to the release pipeline.
+- [ ] Add dependency vulnerability scanning to CI/release checks.
+- [ ] Add secret scanning for repository history and release artifacts.
+- [ ] Create a signed release tag if feasible in the release environment.
+- [ ] Attach the completed live validation report to release notes.
+
 ## Explicit non-goals and out-of-scope items
 
 These remain permanently out of scope, regardless of production-readiness progress — they are
@@ -275,8 +310,7 @@ project boundaries, not temporary gaps:
   MCP tool arguments. The only token-shaped tool parameter is the existing, redacted
   `approval_token` lab/shared-secret mechanism; production approval uses `approval_request_id`,
   not a shared token.
-- A built-in audit-log forwarder, SIEM integration, or log-rotation mechanism — see "Audit
-  logging and SIEM forwarding guidance" above for what deployers are expected to provide.
+- A built-in audit-log forwarder or log-rotation mechanism — see "Audit logging and manual review guidance" above for what beta validators are expected to review manually.
 - A generic multi-approver workflow or approval-token expiry. Production approval mode deliberately
   adds only the narrow SQLite `approval_request_id` store described in `docs/production-write.md`;
   it is not a broader workflow engine.

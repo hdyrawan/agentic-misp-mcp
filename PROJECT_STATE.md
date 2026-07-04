@@ -3,13 +3,14 @@
 Project: agentic-misp-mcp
 
 Current status:
-- Production approval beta complete on `feat/v0.2.0-beta-production-write-approvals`: opt-in
+- Current `main` contains the `v0.2.0-beta.1` production-write beta candidate: opt-in
   `AGENTIC_MISP_MCP_APPROVAL_MODE=production` adds SQLite approval records, CLI-only
   approve/reject, one-time redemption, exact operation hashes, TTL expiry, replay/payload-swap
   blocking, publish kill switch, and type/category/tag guardrails for the four existing
   write-executing tools only. Default lab mode remains backward compatible; `approval_token` is
   lab/shared-secret hardening only, while production requires an operator-approved
-  `approval_request_id` and consumes it before the MISP write attempt.
+  `approval_request_id` and consumes it before the MISP write attempt. This candidate is suitable
+  for isolated pilot validation only; it is not GA production-ready.
 - Phase 1 complete: read-only core MCP
 - Phase 2 complete: agentic IOC investigation engine
 - Phase 3 complete: event intelligence and pivoting
@@ -74,15 +75,15 @@ Current status:
   failure modes, warninglist endpoint compatibility across MISP versions, broader MISP version
   compatibility, and final sign-off.
 
-- Phase 11 in progress: v0.2.0-beta.1 production-write pilot on branch
-  `feat/v0.2.0-beta-production-write-approvals`. Scope is limited to a production approval layer
-  for the four existing write-executing tools only (`submit_ioc_with_approval`,
-  `add_sighting_with_approval`, `tag_event_with_approval`, `publish_event_with_approval`); no raw
-  proxy, new MISP endpoints, admin MCP tools, or additional write capabilities are in scope.
-  Lab approval mode remains the default unless `AGENTIC_MISP_MCP_APPROVAL_MODE=production` is
-  explicitly configured.
+- Phase 11 candidate merged to `main`: `v0.2.0-beta.1` production-write beta. Scope is limited
+  to a production approval layer for the four existing write-executing tools only
+  (`submit_ioc_with_approval`, `add_sighting_with_approval`, `tag_event_with_approval`,
+  `publish_event_with_approval`); no raw proxy, new MISP endpoints, admin MCP tools, or additional
+  write capabilities are in scope. Lab approval mode remains the default unless
+  `AGENTIC_MISP_MCP_APPROVAL_MODE=production` is explicitly configured. Suitable for isolated
+  pilot validation; not GA production-ready.
 
-Current tests: 166 passed.
+Current tests: 166 passed before this documentation hardening pass; re-run the quality gate before tagging.
 Current MCP tool count: 19.
 Current license: MIT.
 
@@ -124,8 +125,7 @@ Current validation status:
 - Not production-ready: lab-validated, not production-certified.
 
 Next steps:
-- Complete remaining live lab validation edge cases: `propose_event`/`propose_attribute` payload
-  validation, large event/result-set behavior, rate-limit/timeout/TLS failure modes, warninglist
-  endpoint compatibility across MISP versions, and final sign-off
-  (`docs/live-validation-plan.md` sections 5-9).
+- Complete the `v0.2.0-beta.1` live beta validation checklist in
+  `docs/live-beta-validation-v0.2.0-beta.1.md`, including read-only edge cases and production
+  approval-mode replay/hash-mismatch/wrong-tool/publish/allowlist/audit checks.
 - Broader MISP version compatibility testing beyond `2.5.42`.

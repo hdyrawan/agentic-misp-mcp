@@ -190,7 +190,7 @@ The first positive live IOC test used `54.87.87.13`, which matched MISP event `1
 
 Additional read-only validation confirmed that domain-side searches for composite `domain|ip` attributes work, including `mines.port0.org` and `eholidays.mooo.com`. SHA256 lookup was also validated using a related payload-delivery hash from the same event.
 
-Because the first positive live test used historical OSINT data, analyst workflows should correlate hits with recent SIEM, EDR, DNS, proxy, firewall, or endpoint telemetry before blocking or escalation.
+Because the first positive live test used historical OSINT data, analyst workflows should correlate hits with current local telemetry before blocking or escalation.
 
 ## Safety model
 
@@ -496,8 +496,9 @@ in full — this section covers the conservative deployment shape, not the compl
 - [`docs/configuration.md`](docs/configuration.md) — full environment variable reference.
 - [`docs/testing.md`](docs/testing.md) — what the mocked test suite covers and does not cover yet.
 - [`docs/roles.md`](docs/roles.md) — `read_only` / `analyst_write` / `curator` / `admin` policy roles.
-- [`docs/approval-flow.md`](docs/approval-flow.md) — the `approved=false` → `pending_approval` → `approved=true` write flow, with examples.
-- [`docs/live-validation-plan.md`](docs/live-validation-plan.md) — live MISP validation checklist and remaining validation work.
+- [`docs/approval-flow.md`](docs/approval-flow.md) — lab approval flow plus the `v0.2.0-beta.1` production approval flow.
+- [`docs/live-validation-plan.md`](docs/live-validation-plan.md) — completed lab validation evidence and remaining validation work.
+- [`docs/live-beta-validation-v0.2.0-beta.1.md`](docs/live-beta-validation-v0.2.0-beta.1.md) — live beta validation checklist before tagging `v0.2.0-beta.1`.
 - [`docs/production-readiness.md`](docs/production-readiness.md) — production-readiness scope, requirements, and release/sign-off acceptance criteria.
 - [`docs/openapi-inventory.md`](docs/openapi-inventory.md) — sample MISP OpenAPI endpoint classification (planning only).
 
@@ -556,9 +557,9 @@ Contributions are welcome, but keep the project boundary intact: no raw API prox
 Commits should be attributed to their human author only — do not add AI co-author trailers (for example `Co-Authored-By: <AI assistant>`) to commits in this repository, regardless of what tooling was used to help write them.
 
 
-### v0.2.0-beta.1 production-write approval mode
+### v0.2.0-beta.1 production-write beta candidate
 
-The default approval mode remains `AGENTIC_MISP_MCP_APPROVAL_MODE=lab`, preserving the existing `approved=true` lab flow. A new opt-in `production` mode adds persisted SQLite approvals for the four existing write-executing tools only: `submit_ioc_with_approval`, `add_sighting_with_approval`, `tag_event_with_approval`, and `publish_event_with_approval`. No new MISP endpoints, raw proxy behavior, or admin tools are exposed.
+The current `main` branch contains the `v0.2.0-beta.1` production-write beta candidate. It is suitable for isolated pilot validation, not GA production use. The default approval mode remains `AGENTIC_MISP_MCP_APPROVAL_MODE=lab`, preserving the existing `approved=true` lab flow. A new opt-in `production` mode adds persisted SQLite approvals for the four existing write-executing tools only: `submit_ioc_with_approval`, `add_sighting_with_approval`, `tag_event_with_approval`, and `publish_event_with_approval`. No new MISP endpoints, raw proxy behavior, or admin tools are exposed.
 
 In production mode, `approved=true` alone is blocked, even if `AGENTIC_MISP_MCP_REQUIRE_APPROVAL=false`. Execution requires an operator-approved `approval_request_id` from `agentic-misp-mcp approvals ...`; no MCP tool can approve or reject. Each production approval is one-time-use, TTL-bound by `AGENTIC_MISP_MCP_APPROVAL_TTL_SECONDS`, and bound to the exact canonical operation hash. The LLM/agent must not have shell access to the approval CLI or write access to the SQLite approval database. If redemption succeeds but the later MISP write fails, the approval remains consumed; the operator must approve a new request for any retry. Publishing is disabled by default with `AGENTIC_MISP_MCP_ENABLE_PUBLISH=false`; additional production guardrails include `AGENTIC_MISP_MCP_ALLOWED_ATTRIBUTE_TYPES`, `AGENTIC_MISP_MCP_ALLOWED_ATTRIBUTE_CATEGORIES`, and `AGENTIC_MISP_MCP_ALLOWED_TAGS`.
 

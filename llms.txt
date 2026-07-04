@@ -12,8 +12,7 @@ It must not become a raw MISP API proxy.
 ## Project status
 
 - Early development.
-- Not production-ready. Production deployment is not yet validated; see production-readiness.md
-  for scope, requirements, and acceptance criteria.
+- `main` contains the `v0.2.0-beta.1` production-write beta candidate. It is suitable for isolated pilot validation only; it is not GA production-ready. Production deployment is not yet validated; see production-readiness.md for scope, requirements, and acceptance criteria.
 - Current MCP tool count: 19.
 - Primary transport: stdio.
 - HTTP transport is experimental.
@@ -47,7 +46,7 @@ Agents and contributors must preserve these boundaries:
 - AGENTIC_MISP_MCP_ROLE: read_only, analyst_write, curator, or admin.
 - AGENTIC_MISP_MCP_ENABLE_WRITE: default false.
 - AGENTIC_MISP_MCP_REQUIRE_APPROVAL: default true.
-- AGENTIC_MISP_MCP_APPROVAL_TOKEN: optional approval-token hardening; audit logs redact it.
+- AGENTIC_MISP_MCP_APPROVAL_TOKEN: optional lab/shared-secret hardening only; audit logs redact it. It is not the production approval mechanism.
 - AGENTIC_MISP_MCP_AUDIT_LOG_PATH: JSONL audit path.
 - AGENTIC_MISP_MCP_MAX_RESPONSE_BYTES: maximum MISP response size before JSON parsing.
 
@@ -223,8 +222,7 @@ This is lab validation evidence, not a production certification.
 
 The first positive live validation used historical OSINT data from 2016. Treat it as
 compatibility and workflow evidence, not current threat activity. Analyst workflows should
-correlate with recent SIEM, EDR, DNS, proxy, firewall, or endpoint telemetry before blocking or
-escalation.
+correlate with current local telemetry before blocking or escalation.
 
 ## Instructions for coding agents
 

@@ -1,5 +1,7 @@
 # Production write beta
 
+The current `main` branch contains the `v0.2.0-beta.1` production-write beta candidate. It is suitable for isolated pilot validation only; it is not GA production-ready.
+
 `v0.2.0-beta.1` adds a production approval mode for the four existing write-executing approval tools only:
 
 - `submit_ioc_with_approval`

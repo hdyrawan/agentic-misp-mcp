@@ -8,6 +8,12 @@ testing is still pending.
 
 ## Unreleased
 
+### Live beta validation hardening (2026-07-04)
+
+- Clarified that `main` now contains the `v0.2.0-beta.1` production-write beta candidate and that it is suitable for isolated pilot validation only, not GA production readiness.
+- Added `docs/live-beta-validation-v0.2.0-beta.1.md` with read-only edge-case checks and production approval-mode checks for one-time redemption, replay/hash-mismatch/wrong-tool blocking, publish kill switch behavior, allowlists, and audit redaction.
+- Expanded production deployment hardening and GA backlog guidance in `docs/production-readiness.md`.
+
 ### v0.2.0-beta.1 production-write approval beta
 
 - Added opt-in `AGENTIC_MISP_MCP_APPROVAL_MODE=production` for the four existing write-executing approval tools only. Lab mode remains the default.
@@ -20,7 +26,7 @@ testing is still pending.
 
 - Added `docs/production-readiness.md`: scope, the read-only-first production target,
   controlled-write production requirements, required runtime configuration, TLS requirements,
-  secret handling, audit logging/SIEM forwarding guidance, a Docker hardening checklist, a
+  secret handling, audit logging/manual review guidance, a Docker hardening checklist, a
   condensed live validation checklist, a release/sign-off checklist (with explicit acceptance
   criteria, marked done/pending against current evidence), and explicit non-goals.
 - Added `.env.production.example`: a placeholder-only production env template defaulting to
