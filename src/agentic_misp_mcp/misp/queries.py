@@ -21,7 +21,47 @@ def event_tag_search_payload(tag: str, limit: int) -> dict[str, object]:
         "returnFormat": "json",
         "tags": [tag],
         "limit": limit,
+        # Metadata-only: event discovery needs summaries, and full-event responses from
+        # large instances blow past AGENTIC_MISP_MCP_MAX_RESPONSE_BYTES (observed live:
+        # >5 MB full vs ~16 KB metadata for the same 5 events).
+        "metadata": True,
     }
+
+
+def sighting_search_payload(value: str, limit: int) -> dict[str, object]:
+    return {
+        "returnFormat": "json",
+        "value": value,
+        "limit": limit,
+    }
+
+
+def event_search_payload(
+    *,
+    date_from: str | None = None,
+    date_to: str | None = None,
+    published: bool | None = None,
+    org: str | None = None,
+    limit: int,
+) -> dict[str, object]:
+    payload: dict[str, object] = {
+        "returnFormat": "json",
+        "limit": limit,
+        # Metadata-only responses; see event_tag_search_payload for why.
+        "metadata": True,
+    }
+    # MISP restSearch date-range params are `from`/`to`. It silently ignores unknown
+    # params (`datefrom`/`dateto` returned unfiltered results on live 2.5.42), so the
+    # names here are load-bearing: a wrong name means unfiltered data, not an error.
+    if date_from is not None:
+        payload["from"] = date_from
+    if date_to is not None:
+        payload["to"] = date_to
+    if published is not None:
+        payload["published"] = published
+    if org is not None:
+        payload["org"] = org
+    return payload
 
 
 def event_create_payload(

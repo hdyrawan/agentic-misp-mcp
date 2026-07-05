@@ -38,7 +38,8 @@ workflows run. The runtime policy environment variables are:
   `approval_token`; missing or incorrect tokens return `blocked`. The token is redacted from audit
   logs and returned errors. It is not the production approval mechanism.
 
-The original 13 read tools are classified as `read` and remain allowed under `read_only`.
+The read tools are classified as `read` and remain allowed under `read_only` when they return
+bounded, safe metadata.
 
 ### Write tool behavior
 
@@ -85,7 +86,7 @@ The original 13 read tools are classified as `read` and remain allowed under `re
 
 ## MCP tool boundary
 
-Nineteen tools are exposed. The original 13 read-only tools:
+Twenty-six tools are exposed. The read-only tools:
 
 - `search_ioc`
 - `investigate_ioc`
@@ -100,6 +101,12 @@ Nineteen tools are exposed. The original 13 read-only tools:
 - `generate_event_report`
 - `generate_markdown_ioc_report`
 - `generate_markdown_event_report`
+- `get_ioc_sightings`
+- `search_events`
+- `get_misp_status`
+- `list_feeds`
+- `get_feed_status`
+- `summarize_feed_health`
 
 Plus six Phase 8 controlled write tools:
 
@@ -113,6 +120,11 @@ Plus six Phase 8 controlled write tools:
 All tools must be registered through `tools/registry.py` and audited through the shared audit
 wrapper. There is no raw MISP API proxy tool, and no user/organisation/server/settings-style
 admin tools exist.
+
+Feed observability is intentionally read-only. MCP tools may list feed metadata, compute fetch/
+cache age, group health labels, and propose operator actions, but they must not fetch, cache,
+enable, disable, edit, or delete feeds. Feed URLs and metadata are redacted before return; auth
+headers, cookies, API keys, tokens, authkeys, passwords, and URL query secrets must not be exposed.
 
 ## Credential handling
 

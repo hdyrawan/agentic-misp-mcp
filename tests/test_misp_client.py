@@ -292,3 +292,141 @@ async def test_response_size_cap_allows_normal_response_under_limit(settings):
         await client.aclose()
 
     assert matches == []
+
+
+@pytest.mark.asyncio
+async def test_search_sightings_uses_rest_search_and_parses(settings):
+    seen = {}
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        seen["path"] = request.url.path
+        seen["body"] = json.loads(request.content)
+        return httpx.Response(
+            200,
+            json={
+                "response": [
+                    {
+                        "Sighting": {
+                            "event_id": "42",
+                            "attribute_id": "7",
+                            "type": "0",
+                            "source": "sensor",
+                            "date_sighting": "1783209600",
+                        }
+                    }
+                ]
+            },
+        )
+
+    client = MISPClient(settings, transport=httpx.MockTransport(handler))
+    try:
+        sightings = await client.search_sightings("1.2.3.4", 10)
+    finally:
+        await client.aclose()
+
+    assert seen == {
+        "path": "/sightings/restSearch",
+        "body": {"returnFormat": "json", "value": "1.2.3.4", "limit": 10},
+    }
+    assert sightings[0].event_id == 42
+    assert sightings[0].attribute_id == "7"
+    assert sightings[0].source == "sensor"
+    assert sightings[0].date_sighting is not None
+
+
+@pytest.mark.asyncio
+async def test_search_events_uses_bounded_filters_and_skips_malformed(settings):
+    seen = {}
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        seen["path"] = request.url.path
+        seen["body"] = json.loads(request.content)
+        return httpx.Response(
+            200,
+            json={
+                "response": [
+                    {"Event": {"id": "9", "info": "event", "date": "2026-07-05"}},
+                    {"Event": {"info": "missing id"}},
+                ]
+            },
+        )
+
+    client = MISPClient(settings, transport=httpx.MockTransport(handler))
+    try:
+        events = await client.search_events(
+            date_from="2026-07-01",
+            date_to="2026-07-05",
+            published=True,
+            org="CIRCL",
+            limit=20,
+        )
+    finally:
+        await client.aclose()
+
+    assert seen == {
+        "path": "/events/restSearch",
+        "body": {
+            "returnFormat": "json",
+            "limit": 20,
+            "metadata": True,
+            "from": "2026-07-01",
+            "to": "2026-07-05",
+            "published": True,
+            "org": "CIRCL",
+        },
+    }
+    assert len(events) == 1
+    assert events[0].id == 9
+
+
+@pytest.mark.asyncio
+async def test_get_version_and_warninglist_probe(settings):
+    paths = []
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        paths.append(request.url.path)
+        if request.url.path == "/servers/getVersion":
+            return httpx.Response(200, json={"version": "2.5.42"})
+        return httpx.Response(200, json={"result": []})
+
+    client = MISPClient(settings, transport=httpx.MockTransport(handler))
+    try:
+        version = await client.get_version()
+        available = await client.probe_warninglists_available()
+    finally:
+        await client.aclose()
+
+    assert version == "2.5.42"
+    assert available is True
+    assert paths == ["/servers/getVersion", "/warninglists/checkValue"]
+
+
+@pytest.mark.asyncio
+async def test_list_feeds_filters_enabled_and_get_feed(settings):
+    paths = []
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        paths.append(request.url.path)
+        if request.url.path == "/feeds/index":
+            return httpx.Response(
+                200,
+                json={
+                    "response": [
+                        {"Feed": {"id": "1", "name": "enabled", "enabled": "1"}},
+                        {"Feed": {"id": "2", "name": "disabled", "enabled": "0"}},
+                    ]
+                },
+            )
+        return httpx.Response(200, json={"Feed": {"id": "1", "name": "enabled"}})
+
+    client = MISPClient(settings, transport=httpx.MockTransport(handler))
+    try:
+        feeds = await client.list_feeds(50, enabled=True)
+        feed = await client.get_feed(1)
+    finally:
+        await client.aclose()
+
+    assert paths == ["/feeds/index", "/feeds/view/1"]
+    assert len(feeds) == 1
+    assert feeds[0]["Feed"]["id"] == "1"
+    assert feed == {"Feed": {"id": "1", "name": "enabled"}}

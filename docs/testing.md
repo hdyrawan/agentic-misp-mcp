@@ -60,7 +60,7 @@ using hand-constructed `PolicyDecision` values to exercise `blocked` / `proposal
 
 At the MCP tool boundary:
 
-- `tests/test_tools_contract.py` registers all 19 tools against a fake MCP object and asserts
+- `tests/test_tools_contract.py` registers all 25 tools against a fake MCP object and asserts
   the exact tool set, the audit record shape for a read tool, and that no raw-proxy or
   user/organisation/server/settings-style admin tool name exists.
 - `tests/test_controlled_write_tools.py` drives the six write tools end-to-end through

@@ -48,7 +48,7 @@ live `429` was not reproduced (no safe way to trigger one in the lab — see
   [`docs/ga-production-readiness-plan.md`](docs/ga-production-readiness-plan.md) for the full list
   and the path beyond GA.
 - `agentic-misp-mcp config doctor` (operational-readiness checks) and `agentic-misp-mcp approvals prune` (operator-CLI-only approval-store maintenance) are both live-validated; see [`docs/configuration.md`](docs/configuration.md) and [`docs/rollback.md`](docs/rollback.md).
-- Current MCP tool count: **19**.
+- Current MCP tool count: **25**.
 - Primary transport: **stdio**.
 - HTTP transport exists but is experimental.
 - Requires Python 3.11+.
@@ -196,7 +196,7 @@ This is the Docker-based `docker run` invocation from "Option B — Docker" abov
 specific MCP clients. Both were built and tested against this exact command during `v0.2.0` GA
 validation — Docker image built locally (`docker build -t agentic-misp-mcp:local .`), container
 confirmed reachable to a real MISP lab over the LAN, and both clients confirmed `tools/list`
-returns all 19 tools and a live `check_warninglists` call returns real MISP data.
+returns all 25 tools and a live `check_warninglists` call returns real MISP data.
 
 In both examples below, replace `/path/to/agentic-misp-mcp/.env` and `/path/to/logs` with your
 own paths (see "Option B — Docker" above for creating them) — never commit a real `.env` file or
@@ -240,12 +240,12 @@ hermes mcp add agentic-misp-mcp \
     agentic-misp-mcp:local --transport stdio
 ```
 
-- Answer `y` at the "Enable all 19 tools?" prompt (or run non-interactively with `echo y | hermes
+- Answer `y` at the "Enable all 25 tools?" prompt (or run non-interactively with `echo y | hermes
   mcp add ...`) to enable the full tool set; use `select` instead of `y` to enable only a subset
   (for example, a read-only Hermes profile might enable everything except the six
   `_with_approval`/`propose_*` write tools).
 - Verify: `hermes mcp list` should show `agentic-misp-mcp ... ✓ enabled`, and `hermes mcp test
-  agentic-misp-mcp` re-runs the discovery handshake and lists all 19 tools. **Start a new Hermes
+  agentic-misp-mcp` re-runs the discovery handshake and lists all 25 tools. **Start a new Hermes
   session** afterward for the tools to be available in chat.
 - To remove: `hermes mcp remove agentic-misp-mcp`.
 - This writes into `~/.hermes/config.yaml`'s `mcp_servers.agentic-misp-mcp` block; back that file
@@ -320,6 +320,10 @@ operation-hash-bound.
 - `investigate_ioc(value, limit=20)` — combine matches, warninglists, related events, scoring, and next steps.
 - `summarize_event(event_id)` — summarize a MISP event without returning full raw event JSON.
 - `check_warninglists(value)` — check an IOC against warninglists when available.
+- `get_ioc_sightings(value, limit=50)` — read bounded sighting summaries for an IOC.
+- `search_events(date_from=None, date_to=None, published=None, org=None, limit=20)` — discover
+  events by bounded date, publication-state, and org filters.
+- `get_misp_status()` — report MISP version and warninglist capability status.
 
 ### Pivoting and event intelligence
 
@@ -328,6 +332,15 @@ operation-hash-bound.
 - `extract_event_iocs(event_id, limit=100)` — extract supported IOC types from an event.
 - `explain_event_context(event_id)` — explain what an event appears to represent.
 - `find_events_by_tag(tag, limit=20)` — find events associated with a tag.
+
+### Feed observability (read-only)
+
+- `list_feeds(limit=50, enabled=None)` — list configured feeds with bounded, redacted metadata.
+- `get_feed_status(feed_id)` — inspect one feed's redacted status and fetch/cache age.
+- `summarize_feed_health(limit=100)` — group feeds by health label.
+
+Feed fetch/cache/enable/disable/edit/delete operations remain operator-only MISP admin actions and
+are not exposed as MCP tools. See [`docs/feed-observability.md`](docs/feed-observability.md).
 
 ### Reporting
 

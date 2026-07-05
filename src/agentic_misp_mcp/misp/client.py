@@ -14,7 +14,9 @@ from agentic_misp_mcp.exceptions import (
 )
 from agentic_misp_mcp.misp.queries import (
     attribute_search_payload,
+    event_search_payload,
     event_tag_search_payload,
+    sighting_search_payload,
     tag_payload,
     warninglist_check_payload,
 )
@@ -26,12 +28,14 @@ from agentic_misp_mcp.models.misp import (
     MISPAttributeSummary,
     MISPEventSummary,
     MISPPublishResult,
+    MISPSightingReadSummary,
     MISPSightingSummary,
     MISPTagResult,
     parse_attribute,
     parse_event,
     parse_publish_result,
     parse_sighting,
+    parse_sighting_read,
     parse_tag_result,
 )
 from agentic_misp_mcp.settings import Settings
@@ -173,6 +177,129 @@ class MISPClient:
                 status="not_available", message="MISP warninglist check endpoint not available"
             )
         return parse_warninglist_response(raw)
+
+    async def search_events(
+        self,
+        *,
+        date_from: str | None = None,
+        date_to: str | None = None,
+        published: bool | None = None,
+        org: str | None = None,
+        limit: int,
+    ) -> list[MISPEventSummary]:
+        raw = await self._request(
+            "POST",
+            "/events/restSearch",
+            json=event_search_payload(
+                date_from=date_from,
+                date_to=date_to,
+                published=published,
+                org=org,
+                limit=limit,
+            ),
+        )
+        return self._parse_event_list(raw, limit)
+
+    async def search_sightings(self, value: str, limit: int) -> list[MISPSightingReadSummary]:
+        raw = await self._request(
+            "POST", "/sightings/restSearch", json=sighting_search_payload(value, limit)
+        )
+        records: list[Any]
+        if isinstance(raw, dict):
+            response = raw.get("response", raw)
+            records = response if isinstance(response, list) else []
+        elif isinstance(raw, list):
+            records = raw
+        else:
+            records = []
+
+        sightings: list[MISPSightingReadSummary] = []
+        for item in records[:limit]:
+            if isinstance(item, dict):
+                sightings.append(parse_sighting_read(item))
+        return sightings
+
+    async def get_version(self) -> str | None:
+        raw = await self._request("GET", "/servers/getVersion")
+        if not isinstance(raw, dict):
+            return None
+        version = raw.get("version") or raw.get("Version") or raw.get("misp_version")
+        return str(version) if version is not None else None
+
+    async def probe_warninglists_available(self) -> bool:
+        result = await self.check_warninglists("agentic-misp-mcp-warninglist-probe.invalid")
+        return result.status != "not_available"
+
+    async def list_feeds(self, limit: int, enabled: bool | None = None) -> list[dict[str, Any]]:
+        raw = await self._request("GET", "/feeds/index")
+        records = self._extract_feed_records(raw)
+        if enabled is not None:
+            records = [record for record in records if self._feed_enabled(record) is enabled]
+        return records[:limit]
+
+    async def get_feed(self, feed_id: int | str) -> dict[str, Any]:
+        raw = await self._request("GET", f"/feeds/view/{feed_id}")
+        if isinstance(raw, dict):
+            return raw
+        raise MISPClientError("MISP feed response was not an object")
+
+    def _parse_event_list(self, raw: Any, limit: int) -> list[MISPEventSummary]:
+        records: list[Any]
+        if isinstance(raw, dict):
+            response = raw.get("response", raw)
+            if isinstance(response, dict):
+                records = response.get("Event") or response.get("events") or []
+            elif isinstance(response, list):
+                records = response
+            else:
+                records = []
+        elif isinstance(raw, list):
+            records = raw
+        else:
+            records = []
+
+        events: list[MISPEventSummary] = []
+        for item in records[:limit]:
+            if not isinstance(item, dict):
+                continue
+            try:
+                events.append(parse_event(item, attribute_limit=0))
+            except ValueError:
+                continue
+        return events
+
+    def _extract_feed_records(self, raw: Any) -> list[dict[str, Any]]:
+        if isinstance(raw, list):
+            records = raw
+        elif isinstance(raw, dict):
+            response = raw.get("response", raw)
+            if isinstance(response, list):
+                records = response
+            elif isinstance(response, dict):
+                nested = response.get("Feed") or response.get("feeds") or response.get("data") or []
+                records = nested if isinstance(nested, list) else [response]
+            else:
+                records = []
+        else:
+            records = []
+        return [record for record in records if isinstance(record, dict)]
+
+    def _feed_enabled(self, raw: dict[str, Any]) -> bool | None:
+        feed = raw.get("Feed", raw)
+        if not isinstance(feed, dict):
+            return None
+        value = feed.get("enabled")
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, int):
+            return bool(value)
+        if isinstance(value, str):
+            lowered = value.strip().lower()
+            if lowered in {"1", "true", "yes"}:
+                return True
+            if lowered in {"0", "false", "no"}:
+                return False
+        return None
 
     # Controlled write methods (Phase 8). Each maps to exactly one narrow MISP write
     # endpoint and is only ever invoked after policy allow + approval checks upstream.

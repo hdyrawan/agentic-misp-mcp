@@ -52,6 +52,11 @@ async def expand_related_events(
                 "id": event.id,
                 "info": event.info,
                 "date": event.date,
+                "timestamp": event.timestamp.isoformat() if event.timestamp else None,
+                "publish_timestamp": (
+                    event.publish_timestamp.isoformat() if event.publish_timestamp else None
+                ),
+                "published": event.published,
                 "threat_level_id": event.threat_level_id,
                 "analysis": event.analysis,
                 "tags": event.tags,
@@ -63,6 +68,19 @@ async def expand_related_events(
             }
         )
     return related_events
+
+
+def event_summary(event: Any) -> dict[str, object]:
+    """Compact event listing shape shared by event-discovery workflows."""
+    return {
+        "event_id": event.id,
+        "info": event.info,
+        "date": event.date,
+        "threat_level": event.threat_level_id,
+        "analysis": event.analysis,
+        "attribute_count": event.attribute_count,
+        "tags": event.tags,
+    }
 
 
 def collect_tags(*, matches: list[Any], related_events: list[dict[str, Any]]) -> list[str]:

@@ -33,8 +33,8 @@ was not performed (no safe way to trigger one in this lab).
   certification against `production-readiness.md`'s broader, stricter checklist (multi-version
   MISP compatibility, live HTTP 429, supply-chain scanning, signed releases); see
   ga-production-readiness-plan.md for what's next beyond this GA claim.
-- Current MCP tool count: 19 (unchanged since Phase 8; config doctor/approvals prune/the
-  validation layer are not new MCP tools).
+- Current MCP tool count: 25 (v0.3.0 adds six read-only tools: sightings/event search/status
+  plus feed observability; config doctor/approvals prune/the validation layer are not MCP tools).
 - Primary transport: stdio.
 - HTTP transport is experimental.
 - Python 3.11+.
@@ -113,6 +113,7 @@ evidence). No new MCP tools, no new MISP write capability, no raw proxy/admin be
 Agents and contributors must preserve these boundaries:
 
 - Do not expose raw MISP API passthrough tools.
+- Do not expose feed fetch/cache/enable/disable/edit/delete tools or raw feed proxy behavior.
 - Do not add generic admin tools for users, organisations, servers, settings, or unrestricted MISP endpoints.
 - Do not pass API keys, approval tokens, authorization headers, passwords, cookies, or secrets through MCP tool arguments.
 - Do not add shell execution or unrestricted filesystem access.
@@ -151,6 +152,12 @@ Pivoting and event intelligence:
 - extract_event_iocs
 - explain_event_context
 - find_events_by_tag
+- get_ioc_sightings
+- search_events
+- get_misp_status
+- list_feeds
+- get_feed_status
+- summarize_feed_health
 
 Reporting:
 

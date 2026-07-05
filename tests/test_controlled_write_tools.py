@@ -39,6 +39,15 @@ NEW_PHASE_8_TOOLS = {
     "publish_event_with_approval",
 }
 
+M3_READ_TOOLS = {
+    "get_ioc_sightings",
+    "search_events",
+    "get_misp_status",
+    "list_feeds",
+    "get_feed_status",
+    "summarize_feed_health",
+}
+
 
 class FakeMCP:
     def __init__(self):
@@ -111,12 +120,12 @@ def _register(monkeypatch, tmp_path, client=None, **env_overrides):
 
 
 @pytest.mark.asyncio
-async def test_tool_count_exactly_nineteen(monkeypatch, tmp_path):
+async def test_tool_count_exactly_twenty_five(monkeypatch, tmp_path):
     mcp, _, _ = _register(monkeypatch, tmp_path)
 
-    assert len(ALLOWED_TOOL_NAMES) == 19
+    assert len(ALLOWED_TOOL_NAMES) == 25
     assert set(mcp.tools) == ALLOWED_TOOL_NAMES
-    assert ORIGINAL_13_TOOLS | NEW_PHASE_8_TOOLS == ALLOWED_TOOL_NAMES
+    assert ORIGINAL_13_TOOLS | M3_READ_TOOLS | NEW_PHASE_8_TOOLS == ALLOWED_TOOL_NAMES
 
 
 @pytest.mark.asyncio

@@ -5,6 +5,46 @@ All notable changes to this project will be documented in this file.
 This project has mocked test coverage plus live-lab validation (read-only and controlled-write)
 against MISP `2.5.42`; broader MISP version compatibility testing is still pending.
 
+## v0.3.0 (2026-07-05) — age-aware scoring and read-tool expansion
+
+Implements M1–M3 of `docs/improvement-plan-v0.3.0.md`. All response changes are additive; no
+tool was renamed or removed from the v0.2.x surface, and no new MISP write capability exists.
+
+### Added
+
+- **Age-aware scoring** (`investigate_ioc`, `generate_ioc_report`, `pivot_ioc`): responses gain
+  a `freshness` block (`fresh`/`aging`/`stale`/`expired`/`unknown` label, newest-signal age,
+  age weight, per-source signals, thresholds). When `AGENTIC_MISP_MCP_AGE_WEIGHTING` is enabled
+  (default), positive score factors are discounted by intel age, expired-only intel caps at
+  score 60 (below the `likely_malicious` threshold), and actionable-and-attributed intel
+  (`to_ids` + threat-actor/malware tag) floors at the stale weight. Penalties (warninglist,
+  benign tags) are never discounted. `AGENTIC_MISP_MCP_AGE_WEIGHTING=false` reproduces v0.2.x
+  scoring exactly.
+- **Timestamp parsing**: attribute `timestamp`/`first_seen`/`last_seen` and event
+  `timestamp`/`publish_timestamp`/`published` are now parsed into summaries; expanded
+  related-event entries expose them.
+- **Six new read-only tools** (25 total): `get_ioc_sightings`, `search_events`,
+  `get_misp_status`, `list_feeds`, `get_feed_status`, `summarize_feed_health`. Feed responses
+  redact URLs (userinfo + sensitive query keys) and header/token-like fields.
+- **Read-tool response envelope**: dict responses carry `tool_name` and `schema_version: 1`.
+- New settings: `AGENTIC_MISP_MCP_FRESHNESS_{FRESH,AGING,STALE}_DAYS` (30/90/365),
+  `AGENTIC_MISP_MCP_AGE_WEIGHTING`, `AGENTIC_MISP_MCP_AGE_WEIGHTS`,
+  `AGENTIC_MISP_MCP_FEED_{FRESH,STALE}_DAYS` — all validated (ordering, 0–1 weight range).
+
+### Fixed (pre-merge review, `docs/review-v0.3.0-findings.md`)
+
+- `search_events` date filters used parameter names MISP silently ignores (`datefrom`/`dateto`),
+  returning unfiltered results that looked filtered — confirmed live on `2.5.42`; now uses
+  `from`/`to` and validates dates as `YYYY-MM-DD`.
+- Removed a static no-op `propose_feed_changes` tool found on the M3 branch (ignored its input,
+  misused the `propose_*` write-builder naming for a read action).
+- `get_feed_status` validates `feed_id` as a positive integer in the workflow itself.
+
+### Behavior note
+
+Confidence scores for old intel are intentionally lower than in v0.2.x when age weighting is
+on. Set `AGENTIC_MISP_MCP_AGE_WEIGHTING=false` to restore exact v0.2.x scoring.
+
 ## v0.2.1 (2026-07-05) — security-review hardening
 
 Security-review hardening pass over the `v0.2.0` GA code (no new tools, no new MISP write
