@@ -567,8 +567,6 @@ production event data in commits, issues, or PR descriptions; use the placeholde
 throughout this README and `.env.example`. If you find a security issue rather than proposing a
 fix, follow the reporting process in [`SECURITY.md`](SECURITY.md) instead of opening a public PR.
 
-
-
 ## License
 
 MIT.
