@@ -52,6 +52,12 @@ def check_configuration() -> ConfigCheckResult:
         f"OK AGENTIC_MISP_MCP_MAX_RESPONSE_BYTES={settings.max_response_bytes}",
         "OK AGENTIC_MISP_MCP_ALLOW_INSECURE_HTTP_BIND="
         f"{str(settings.allow_insecure_http_bind).lower()}",
+        f"OK AGENTIC_MISP_MCP_AGE_WEIGHTING={str(settings.age_weighting).lower()}",
+        "OK AGENTIC_MISP_MCP_AGE_WEIGHTS="
+        f"{','.join(str(weight) for weight in settings.age_weights)}",
+        "OK AGENTIC_MISP_MCP_FRESHNESS_FRESH_DAYS/AGING_DAYS/STALE_DAYS="
+        f"{settings.freshness_fresh_days}/{settings.freshness_aging_days}/"
+        f"{settings.freshness_stale_days}",
     ]
 
     if settings.approval_mode == "production":
@@ -151,4 +157,14 @@ FIELD_TO_ENV = {
     "AGENTIC_MISP_MCP_MAX_RESPONSE_BYTES": "AGENTIC_MISP_MCP_MAX_RESPONSE_BYTES",
     "allow_insecure_http_bind": "AGENTIC_MISP_MCP_ALLOW_INSECURE_HTTP_BIND",
     "AGENTIC_MISP_MCP_ALLOW_INSECURE_HTTP_BIND": "AGENTIC_MISP_MCP_ALLOW_INSECURE_HTTP_BIND",
+    "freshness_fresh_days": "AGENTIC_MISP_MCP_FRESHNESS_FRESH_DAYS",
+    "AGENTIC_MISP_MCP_FRESHNESS_FRESH_DAYS": "AGENTIC_MISP_MCP_FRESHNESS_FRESH_DAYS",
+    "freshness_aging_days": "AGENTIC_MISP_MCP_FRESHNESS_AGING_DAYS",
+    "AGENTIC_MISP_MCP_FRESHNESS_AGING_DAYS": "AGENTIC_MISP_MCP_FRESHNESS_AGING_DAYS",
+    "freshness_stale_days": "AGENTIC_MISP_MCP_FRESHNESS_STALE_DAYS",
+    "AGENTIC_MISP_MCP_FRESHNESS_STALE_DAYS": "AGENTIC_MISP_MCP_FRESHNESS_STALE_DAYS",
+    "age_weighting": "AGENTIC_MISP_MCP_AGE_WEIGHTING",
+    "AGENTIC_MISP_MCP_AGE_WEIGHTING": "AGENTIC_MISP_MCP_AGE_WEIGHTING",
+    "age_weights": "AGENTIC_MISP_MCP_AGE_WEIGHTS",
+    "AGENTIC_MISP_MCP_AGE_WEIGHTS": "AGENTIC_MISP_MCP_AGE_WEIGHTS",
 }

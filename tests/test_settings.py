@@ -103,3 +103,90 @@ def test_production_approval_and_allowlist_settings(monkeypatch, tmp_path):
     assert settings.enable_publish is True
     assert settings.allowed_attribute_types == ("ip-dst", "url")
     assert settings.allowed_tags == ("tlp:*", "misp-galaxy:foo")
+
+
+def _freshness_env(monkeypatch, **env):
+    monkeypatch.setenv("MISP_URL", "https://misp.example.test")
+    monkeypatch.setenv("MISP_API_KEY", "secret")
+    for key, value in env.items():
+        monkeypatch.setenv(key, value)
+
+
+def test_freshness_defaults(monkeypatch):
+    _freshness_env(monkeypatch)
+
+    settings = Settings()
+
+    assert settings.freshness_fresh_days == 30
+    assert settings.freshness_aging_days == 90
+    assert settings.freshness_stale_days == 365
+    assert settings.age_weighting is True
+    assert settings.age_weights == (1.0, 0.75, 0.4, 0.15)
+
+
+def test_freshness_thresholds_configurable(monkeypatch):
+    _freshness_env(
+        monkeypatch,
+        AGENTIC_MISP_MCP_FRESHNESS_FRESH_DAYS="7",
+        AGENTIC_MISP_MCP_FRESHNESS_AGING_DAYS="14",
+        AGENTIC_MISP_MCP_FRESHNESS_STALE_DAYS="60",
+        AGENTIC_MISP_MCP_AGE_WEIGHTING="false",
+    )
+
+    settings = Settings()
+
+    assert (settings.freshness_fresh_days, settings.freshness_aging_days) == (7, 14)
+    assert settings.freshness_stale_days == 60
+    assert settings.age_weighting is False
+
+
+def test_freshness_threshold_misordering_fails(monkeypatch):
+    _freshness_env(
+        monkeypatch,
+        AGENTIC_MISP_MCP_FRESHNESS_FRESH_DAYS="90",
+        AGENTIC_MISP_MCP_FRESHNESS_AGING_DAYS="90",
+    )
+
+    with pytest.raises(ValidationError, match="ordered"):
+        Settings()
+
+
+def test_freshness_threshold_must_be_positive(monkeypatch):
+    _freshness_env(monkeypatch, AGENTIC_MISP_MCP_FRESHNESS_FRESH_DAYS="0")
+
+    with pytest.raises(ValidationError):
+        Settings()
+
+
+def test_age_weights_csv_parsing(monkeypatch):
+    _freshness_env(monkeypatch, AGENTIC_MISP_MCP_AGE_WEIGHTS="1.0, 0.9, 0.5, 0.1")
+
+    assert Settings().age_weights == (1.0, 0.9, 0.5, 0.1)
+
+
+def test_age_weights_out_of_range_fails(monkeypatch):
+    _freshness_env(monkeypatch, AGENTIC_MISP_MCP_AGE_WEIGHTS="1.5,0.75,0.4,0.15")
+
+    with pytest.raises(ValidationError, match="between 0 and 1"):
+        Settings()
+
+
+def test_age_weights_negative_fails(monkeypatch):
+    _freshness_env(monkeypatch, AGENTIC_MISP_MCP_AGE_WEIGHTS="1.0,0.75,0.4,-0.1")
+
+    with pytest.raises(ValidationError, match="between 0 and 1"):
+        Settings()
+
+
+def test_age_weights_wrong_count_fails(monkeypatch):
+    _freshness_env(monkeypatch, AGENTIC_MISP_MCP_AGE_WEIGHTS="1.0,0.75")
+
+    with pytest.raises(ValidationError):
+        Settings()
+
+
+def test_age_weights_non_numeric_fails(monkeypatch):
+    _freshness_env(monkeypatch, AGENTIC_MISP_MCP_AGE_WEIGHTS="high,low,mid,none")
+
+    with pytest.raises(ValidationError, match="comma-separated numbers"):
+        Settings()

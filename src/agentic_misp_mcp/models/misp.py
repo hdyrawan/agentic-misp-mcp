@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from typing import Any
 
 from pydantic import BaseModel, Field
@@ -17,6 +18,9 @@ class MISPAttributeSummary(BaseModel):
     value: str | None = None
     comment: str | None = None
     to_ids: bool | None = None
+    timestamp: datetime | None = None
+    first_seen: datetime | None = None
+    last_seen: datetime | None = None
     tags: list[str] = Field(default_factory=list)
 
 
@@ -27,6 +31,9 @@ class MISPEventSummary(BaseModel):
     threat_level_id: str | None = None
     analysis: str | None = None
     distribution: str | None = None
+    timestamp: datetime | None = None
+    publish_timestamp: datetime | None = None
+    published: bool | None = None
     tags: list[str] = Field(default_factory=list)
     attribute_count: int = 0
     attributes_by_type: dict[str, int] = Field(default_factory=dict)
@@ -68,6 +75,44 @@ def _coerce_event_id(value: Any) -> int | None:
         return None
 
 
+def parse_misp_datetime(value: Any) -> datetime | None:
+    """Normalize MISP timestamp shapes to an aware UTC datetime.
+
+    MISP mixes epoch strings/ints (`timestamp`, `publish_timestamp`, `date_sighting`) with ISO
+    strings (`first_seen`/`last_seen`), and returns empty strings rather than omitting fields it
+    has no value for (observed live on 2.5.42), so blank/zero values must map to None.
+    """
+    if value is None or isinstance(value, bool):
+        return None
+    if isinstance(value, datetime):
+        return value if value.tzinfo else value.replace(tzinfo=timezone.utc)  # noqa: UP017
+    if isinstance(value, int | float):
+        return _from_epoch(value)
+    if isinstance(value, str):
+        text = value.strip()
+        if not text:
+            return None
+        try:
+            return _from_epoch(float(text))
+        except ValueError:
+            pass
+        try:
+            parsed = datetime.fromisoformat(text)
+        except ValueError:
+            return None
+        return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)  # noqa: UP017
+    return None
+
+
+def _from_epoch(value: float) -> datetime | None:
+    if value <= 0:
+        return None
+    try:
+        return datetime.fromtimestamp(value, tz=timezone.utc)  # noqa: UP017
+    except (OverflowError, OSError, ValueError):
+        return None
+
+
 def parse_tags(raw: Any) -> list[str]:
     tags = []
     if not isinstance(raw, list):
@@ -91,6 +136,9 @@ def parse_attribute(raw: dict[str, Any]) -> MISPAttributeSummary:
         value=attr.get("value"),
         comment=attr.get("comment"),
         to_ids=attr.get("to_ids"),
+        timestamp=parse_misp_datetime(attr.get("timestamp")),
+        first_seen=parse_misp_datetime(attr.get("first_seen")),
+        last_seen=parse_misp_datetime(attr.get("last_seen")),
         tags=parse_tags(attr.get("Tag") or attr.get("tags")),
     )
 
@@ -116,6 +164,9 @@ def parse_event(raw: dict[str, Any], attribute_limit: int) -> MISPEventSummary:
         threat_level_id=event.get("threat_level_id"),
         analysis=event.get("analysis"),
         distribution=event.get("distribution"),
+        timestamp=parse_misp_datetime(event.get("timestamp")),
+        publish_timestamp=parse_misp_datetime(event.get("publish_timestamp")),
+        published=event.get("published") if isinstance(event.get("published"), bool) else None,
         tags=parse_tags(event.get("Tag") or event.get("tags")),
         attribute_count=len(raw_attributes),
         attributes_by_type=counts,

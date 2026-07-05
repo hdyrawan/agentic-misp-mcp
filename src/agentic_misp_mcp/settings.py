@@ -71,6 +71,19 @@ class Settings(BaseSettings):
     allow_insecure_http_bind: bool = Field(
         default=False, validation_alias="AGENTIC_MISP_MCP_ALLOW_INSECURE_HTTP_BIND"
     )
+    freshness_fresh_days: int = Field(
+        default=30, validation_alias="AGENTIC_MISP_MCP_FRESHNESS_FRESH_DAYS", ge=1
+    )
+    freshness_aging_days: int = Field(
+        default=90, validation_alias="AGENTIC_MISP_MCP_FRESHNESS_AGING_DAYS", ge=1
+    )
+    freshness_stale_days: int = Field(
+        default=365, validation_alias="AGENTIC_MISP_MCP_FRESHNESS_STALE_DAYS", ge=1
+    )
+    age_weighting: bool = Field(default=True, validation_alias="AGENTIC_MISP_MCP_AGE_WEIGHTING")
+    age_weights: Annotated[tuple[float, float, float, float], NoDecode] = Field(
+        default=(1.0, 0.75, 0.4, 0.15), validation_alias="AGENTIC_MISP_MCP_AGE_WEIGHTS"
+    )
 
     @field_validator("misp_api_key")
     @classmethod
@@ -111,10 +124,41 @@ class Settings(BaseSettings):
             return tuple(str(item).strip() for item in value if str(item).strip())
         raise TypeError("allowlist must be a comma-separated string")
 
+    @field_validator("age_weights", mode="before")
+    @classmethod
+    def parse_age_weights(cls, value: object) -> tuple[float, ...]:
+        if value is None or value == "":
+            return (1.0, 0.75, 0.4, 0.15)
+        if isinstance(value, str):
+            parts = [item.strip() for item in value.split(",") if item.strip()]
+            try:
+                return tuple(float(item) for item in parts)
+            except ValueError as exc:
+                raise ValueError(
+                    "AGENTIC_MISP_MCP_AGE_WEIGHTS must be four comma-separated numbers"
+                ) from exc
+        if isinstance(value, (list, tuple)):
+            return tuple(float(item) for item in value)
+        raise TypeError("AGENTIC_MISP_MCP_AGE_WEIGHTS must be a comma-separated string")
+
+    @field_validator("age_weights")
+    @classmethod
+    def age_weights_must_be_in_range(
+        cls, value: tuple[float, float, float, float]
+    ) -> tuple[float, float, float, float]:
+        if any(weight < 0.0 or weight > 1.0 for weight in value):
+            raise ValueError("AGENTIC_MISP_MCP_AGE_WEIGHTS values must each be between 0 and 1")
+        return value
+
     @model_validator(mode="after")
     def limits_must_be_consistent(self) -> Settings:
         if self.misp_default_limit > self.misp_max_limit:
             raise ValueError("MISP_DEFAULT_LIMIT must be <= MISP_MAX_LIMIT")
+        if not (self.freshness_fresh_days < self.freshness_aging_days < self.freshness_stale_days):
+            raise ValueError(
+                "freshness thresholds must be ordered: AGENTIC_MISP_MCP_FRESHNESS_FRESH_DAYS < "
+                "AGENTIC_MISP_MCP_FRESHNESS_AGING_DAYS < AGENTIC_MISP_MCP_FRESHNESS_STALE_DAYS"
+            )
         return self
 
     def clamp_limit(self, requested: int | None) -> int:
