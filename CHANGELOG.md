@@ -5,6 +5,28 @@ All notable changes to this project will be documented in this file.
 This project has mocked test coverage plus live-lab validation (read-only and controlled-write)
 against MISP `2.5.42`; broader MISP version compatibility testing is still pending.
 
+## Unreleased
+
+Security-review hardening pass over the `v0.2.0` GA code (no new tools, no new MISP write
+capability):
+
+- **HTTP bind gate now covers all non-loopback hosts.** `--transport http` previously refused
+  only the literal `0.0.0.0`; `--host ::` (IPv6 any) or a LAN address bypassed the check. The
+  gate now refuses any non-loopback bind (`127.0.0.0/8`, `::1`, and `localhost` remain allowed)
+  unless `AGENTIC_MISP_MCP_ALLOW_INSECURE_HTTP_BIND=true` is explicitly set.
+- **`submit_ioc_with_approval` validates the attribute payload before writing.** The submit path
+  now runs the same `validate_attribute_proposal` checks as `propose_attribute` (required
+  fields, value-length bounds, known type/category vocabulary) and returns `status: "invalid"`
+  with `validation_errors` before any approval record is created or MISP is contacted.
+- **`add_sighting_with_approval` validates the sighting payload.** New
+  `validate_sighting_proposal`: at least one of `value`/`event_id`/`attribute_id` is required,
+  `sighting_type` must be `0`/`1`/`2`, and value/source lengths are bounded; invalid payloads
+  return `status: "invalid"` instead of a doomed MISP call.
+- **Lab approval token comparison is constant-time.** The shared `approval_token` check now uses
+  `hmac.compare_digest` instead of `==`, removing a timing side channel.
+- Docs updated to match (`docs/security.md`, `docs/configuration.md`,
+  `docs/production-readiness.md`, `README.md`).
+
 ## v0.2.0 (2026-07-04) — first GA release
 
 **`v0.2.0` is GA production-ready for the MCP server scope defined in this project** (MCP server

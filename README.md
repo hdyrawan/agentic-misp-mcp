@@ -489,7 +489,7 @@ anything but an isolated lab.
 | `AGENTIC_MISP_MCP_ALLOWED_TAGS` | No | unset | Optional production guardrail for event tags; entries ending in `*` act as prefixes. |
 | `AGENTIC_MISP_MCP_ENABLE_PUBLISH` | No | `false` | Dedicated publish kill switch; production publish also requires curator/admin role and approval. |
 | `AGENTIC_MISP_MCP_MAX_RESPONSE_BYTES` | No | `5242880` | Maximum MISP HTTP response body size, enforced before JSON parsing. |
-| `AGENTIC_MISP_MCP_ALLOW_INSECURE_HTTP_BIND` | No | `false` | Allows experimental HTTP transport to bind `0.0.0.0`; keep false unless behind authenticated TLS termination. |
+| `AGENTIC_MISP_MCP_ALLOW_INSECURE_HTTP_BIND` | No | `false` | Allows experimental HTTP transport to bind a non-loopback host (e.g. `0.0.0.0` or `::`); keep false unless behind authenticated TLS termination. |
 
 See `docs/configuration.md` for more examples.
 
@@ -576,7 +576,7 @@ reporting (`AGENTIC_MISP_MCP_ROLE=read_only`, `AGENTIC_MISP_MCP_ENABLE_WRITE=fal
    the process, so there is no separate "daemon" to manage.
 
 **HTTP transport is not the default recommendation for production.** It is experimental, has no
-built-in authentication or TLS, and refuses to bind `0.0.0.0` unless
+built-in authentication or TLS, and refuses to bind a non-loopback host (`0.0.0.0`, `::`, or a LAN address) unless
 `AGENTIC_MISP_MCP_ALLOW_INSECURE_HTTP_BIND=true` is explicitly set. If you use it in production at
 all, it must sit behind an authenticated, TLS-terminating gateway (reverse proxy or service mesh)
 that terminates TLS and enforces authentication before any traffic reaches this server — stdio
@@ -590,7 +590,7 @@ in full — this section covers the conservative deployment shape, not the compl
 ## Security notes
 
 - Use stdio by default.
-- Treat HTTP transport as experimental. Binding to `0.0.0.0` is refused by default because HTTP mode has no built-in auth/TLS; use `127.0.0.1` or place it behind authenticated TLS termination and explicitly opt in.
+- Treat HTTP transport as experimental. Binding to a non-loopback host (`0.0.0.0`, `::`, or a LAN address) is refused by default because HTTP mode has no built-in auth/TLS; use `127.0.0.1` or place it behind authenticated TLS termination and explicitly opt in.
 - Keep `.env`, audit logs, and API keys out of git.
 - Automated tests still use mocked MISP responses.
 - First manual read-only live lab validation has passed against MISP `2.5.42`; controlled-write validation has since passed against the same lab. Broader MISP version compatibility remains pending.

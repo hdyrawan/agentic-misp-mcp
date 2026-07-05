@@ -53,7 +53,12 @@ The original 13 read tools are classified as `read` and remain allowed under `re
   and MISP is never contacted either way.
 - `submit_ioc_with_approval`, `add_sighting_with_approval`, `tag_event_with_approval`, and
   `publish_event_with_approval` each accept `approved: bool = False`, optional `approval_token`
-  for lab mode, and optional `approval_request_id` for production mode. Each call returns one of:
+  for lab mode, and optional `approval_request_id` for production mode.
+  `submit_ioc_with_approval` runs the same attribute payload validation as `propose_attribute`,
+  and `add_sighting_with_approval` validates the sighting payload (at least one of
+  `value`/`event_id`/`attribute_id`, a known `sighting_type`, bounded lengths); an invalid
+  payload returns `status: "invalid"` before any approval record is created and MISP is never
+  contacted. Each call returns one of:
   - `blocked` — write mode disabled, or role does not permit the action. No MISP call is made.
   - `pending_approval` — role permits the action but approval is required and `approved` was
     not set. Returns a sanitized `ApprovalRequest` proposal. No MISP call is made.
@@ -154,7 +159,7 @@ without baking secrets or runtime state into the image.
 - The Docker image exposes port `8000` only for optional experimental HTTP mode; stdio remains the
   primary supported transport.
 - Do not bake `MISP_URL` or `MISP_API_KEY` into Dockerfiles, images, or committed config.
-- Treat HTTP transport as experimental. Binding to `0.0.0.0` is refused by default because HTTP
+- Treat HTTP transport as experimental. Binding to a non-loopback host (`0.0.0.0`, `::`, or a LAN address) is refused by default because HTTP
   mode has no built-in auth/TLS. Use loopback (`127.0.0.1`) unless explicitly setting
   `AGENTIC_MISP_MCP_ALLOW_INSECURE_HTTP_BIND=true` behind an authenticated TLS-terminating
   gateway.

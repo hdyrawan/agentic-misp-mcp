@@ -203,6 +203,19 @@ def test_http_bind_to_loopback_allowed(monkeypatch, tmp_path):
     settings = Settings()
 
     validate_http_bind_allowed(settings, "127.0.0.1")
+    validate_http_bind_allowed(settings, "::1")
+    validate_http_bind_allowed(settings, "localhost")
+
+
+@pytest.mark.parametrize("host", ["::", "192.168.1.10", "10.0.0.5", "example.internal"])
+def test_http_bind_to_non_loopback_blocked_by_default(monkeypatch, tmp_path, host):
+    _valid_env(monkeypatch, tmp_path)
+    settings = Settings()
+
+    with pytest.raises(StartupConfigurationError) as exc_info:
+        validate_http_bind_allowed(settings, host)
+
+    assert "auth/TLS" in str(exc_info.value)
 
 
 def test_approval_cli_list_show_approve_reject(monkeypatch, tmp_path, capsys):

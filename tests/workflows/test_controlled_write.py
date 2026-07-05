@@ -192,6 +192,108 @@ async def test_submit_ioc_executes_without_approved_flag_when_approval_not_requi
 
 
 @pytest.mark.asyncio
+async def test_submit_ioc_returns_invalid_status_for_unsupported_type():
+    client = FakeWriteClient()
+    decision = _decision(
+        tool_name="submit_ioc_with_approval",
+        action=Action.WRITE,
+        role=Role.ANALYST_WRITE,
+        allowed=True,
+        approval_required=False,
+    )
+    result = await submit_ioc_with_approval_workflow(
+        client,
+        decision,
+        event_id=1,
+        type="totally-made-up-type",
+        value="1.2.3.4",
+        category=None,
+        comment=None,
+        to_ids=None,
+        approved=True,
+    )
+    assert result["status"] == "invalid"
+    assert any("not a recognized/supported" in error for error in result["validation_errors"])
+    assert client.calls == []
+
+
+@pytest.mark.asyncio
+async def test_submit_ioc_returns_invalid_status_before_creating_approval():
+    client = FakeWriteClient()
+    decision = _decision(
+        tool_name="submit_ioc_with_approval",
+        action=Action.WRITE,
+        role=Role.ANALYST_WRITE,
+        allowed=True,
+        approval_required=True,
+    )
+    result = await submit_ioc_with_approval_workflow(
+        client,
+        decision,
+        event_id=0,
+        type="ip-dst",
+        value="",
+        category=None,
+        comment=None,
+        to_ids=None,
+        approved=False,
+    )
+    assert result["status"] == "invalid"
+    assert "approval" not in result
+    assert client.calls == []
+
+
+@pytest.mark.asyncio
+async def test_add_sighting_returns_invalid_status_without_any_target():
+    client = FakeWriteClient()
+    decision = _decision(
+        tool_name="add_sighting_with_approval",
+        action=Action.WRITE,
+        role=Role.ANALYST_WRITE,
+        allowed=True,
+        approval_required=False,
+    )
+    result = await add_sighting_with_approval_workflow(
+        client,
+        decision,
+        value=None,
+        event_id=None,
+        attribute_id=None,
+        sighting_type="0",
+        source=None,
+        approved=True,
+    )
+    assert result["status"] == "invalid"
+    assert any("at least one of" in error for error in result["validation_errors"])
+    assert client.calls == []
+
+
+@pytest.mark.asyncio
+async def test_add_sighting_returns_invalid_status_for_bad_sighting_type():
+    client = FakeWriteClient()
+    decision = _decision(
+        tool_name="add_sighting_with_approval",
+        action=Action.WRITE,
+        role=Role.ANALYST_WRITE,
+        allowed=True,
+        approval_required=False,
+    )
+    result = await add_sighting_with_approval_workflow(
+        client,
+        decision,
+        value="1.2.3.4",
+        event_id=None,
+        attribute_id=None,
+        sighting_type="9",
+        source=None,
+        approved=True,
+    )
+    assert result["status"] == "invalid"
+    assert any("sighting_type" in error for error in result["validation_errors"])
+    assert client.calls == []
+
+
+@pytest.mark.asyncio
 async def test_add_sighting_blocked_when_not_allowed():
     client = FakeWriteClient()
     decision = _decision(

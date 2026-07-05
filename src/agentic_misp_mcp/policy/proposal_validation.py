@@ -10,6 +10,8 @@ MAX_TAG_LENGTH = 255
 VALID_DISTRIBUTIONS = {0, 1, 2, 3, 4, 5}
 VALID_THREAT_LEVELS = {1, 2, 3, 4}
 VALID_ANALYSIS_LEVELS = {0, 1, 2}
+# MISP sighting types: 0 = sighting, 1 = false positive, 2 = expiration.
+VALID_SIGHTING_TYPES = {"0", "1", "2"}
 
 # Standard MISP event/attribute categories (misp-core-format taxonomy). Anything outside
 # this set is rejected as unsupported rather than silently passed through to a proposal.
@@ -226,6 +228,45 @@ def validate_attribute_proposal(
 
     if to_ids is not None and not isinstance(to_ids, bool):
         errors.append("to_ids must be a boolean when provided")
+
+    return errors
+
+
+def validate_sighting_proposal(
+    *,
+    value: Any,
+    event_id: Any,
+    attribute_id: Any,
+    sighting_type: Any,
+    source: Any,
+) -> list[str]:
+    """Validate a proposed MISP sighting payload. Returns a list of human-readable errors,
+    empty when the proposal is well-formed. Never touches MISP."""
+    errors: list[str] = []
+
+    if value is None and event_id is None and attribute_id is None:
+        errors.append("at least one of value, event_id, or attribute_id is required")
+
+    if value is not None:
+        if not isinstance(value, str) or not value.strip():
+            errors.append("value must not be blank when provided")
+        elif len(value) > MAX_VALUE_LENGTH:
+            errors.append(f"value must be <= {MAX_VALUE_LENGTH} characters")
+
+    if event_id is not None and (not _is_plain_int(event_id) or event_id <= 0):
+        errors.append("event_id must be a positive integer when provided")
+
+    if attribute_id is not None and (not isinstance(attribute_id, str) or not attribute_id.strip()):
+        errors.append("attribute_id must not be blank when provided")
+
+    if not isinstance(sighting_type, str) or sighting_type not in VALID_SIGHTING_TYPES:
+        errors.append(f"sighting_type must be one of {sorted(VALID_SIGHTING_TYPES)}")
+
+    if source is not None:
+        if not isinstance(source, str):
+            errors.append("source must be a string when provided")
+        elif len(source) > MAX_TEXT_LENGTH:
+            errors.append(f"source must be <= {MAX_TEXT_LENGTH} characters")
 
     return errors
 

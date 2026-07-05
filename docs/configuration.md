@@ -28,7 +28,7 @@ TLS, and secret-handling requirements before deploying against a real MISP insta
 | `AGENTIC_MISP_MCP_REQUIRE_APPROVAL` | No | `true` | Require an explicit `approved=true` argument for controlled write/publish actions when enabled and role-allowed. |
 | `AGENTIC_MISP_MCP_APPROVAL_TOKEN` | No | unset | Optional approval-token enforcement. When set and approval is required, `approved=true` calls must also include the matching `approval_token`. The token is redacted from audit logs and config-check output. |
 | `AGENTIC_MISP_MCP_MAX_RESPONSE_BYTES` | No | `5242880` | Maximum MISP HTTP response body size. Checked before JSON parsing using both `Content-Length` and actual bytes read. |
-| `AGENTIC_MISP_MCP_ALLOW_INSECURE_HTTP_BIND` | No | `false` | Permit experimental HTTP transport to bind `0.0.0.0`. Leave false unless the server is behind an authenticated TLS-terminating gateway. |
+| `AGENTIC_MISP_MCP_ALLOW_INSECURE_HTTP_BIND` | No | `false` | Permit experimental HTTP transport to bind a non-loopback host (e.g. `0.0.0.0` or `::`). Leave false unless the server is behind an authenticated TLS-terminating gateway. |
 
 ## Example `.env`
 
@@ -69,7 +69,10 @@ are modeled and fully audited; there is no persistent approval storage across pr
 (`v0.2.0-rc.1`): required fields, `distribution`/`threat_level_id`/`analysis` ranges, and a
 known-vocabulary attribute type/category allowlist. A malformed or unsupported payload returns
 `status: "invalid"` with a `validation_errors` list instead of a proposal; see
-[`docs/security.md`](security.md).
+[`docs/security.md`](security.md). The same validation also runs on the actual write path:
+`submit_ioc_with_approval` reuses the attribute payload validation, and
+`add_sighting_with_approval` validates the sighting payload, so an invalid payload returns
+`status: "invalid"` before any approval record is created and MISP is never contacted.
 
 Production-oriented runtime guidance:
 
@@ -141,7 +144,7 @@ agentic-misp-mcp --transport http --host 127.0.0.1 --port 8000
 
 Use stdio if your MCP client or FastMCP version does not support HTTP mode.
 
-Do not expose HTTP mode directly to untrusted networks. Binding HTTP to `0.0.0.0` is blocked by
+Do not expose HTTP mode directly to untrusted networks. Binding HTTP to any non-loopback host (`0.0.0.0`, `::`, or a LAN address) is blocked by
 default because this mode has no built-in auth/TLS. Only set
 `AGENTIC_MISP_MCP_ALLOW_INSECURE_HTTP_BIND=true` when the listener is behind an authenticated,
 TLS-terminating gateway and audit logs are monitored closely.

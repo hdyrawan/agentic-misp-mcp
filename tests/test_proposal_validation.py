@@ -3,6 +3,7 @@ from __future__ import annotations
 from agentic_misp_mcp.policy.proposal_validation import (
     validate_attribute_proposal,
     validate_event_proposal,
+    validate_sighting_proposal,
 )
 
 
@@ -220,3 +221,60 @@ def test_attribute_proposal_accumulates_multiple_errors():
         to_ids="not-a-bool",
     )
     assert len(errors) >= 4
+
+
+def test_valid_sighting_proposal_has_no_errors():
+    errors = validate_sighting_proposal(
+        value="1.2.3.4",
+        event_id=None,
+        attribute_id=None,
+        sighting_type="0",
+        source="SOC",
+    )
+    assert errors == []
+
+
+def test_sighting_proposal_requires_at_least_one_target():
+    errors = validate_sighting_proposal(
+        value=None,
+        event_id=None,
+        attribute_id=None,
+        sighting_type="0",
+        source=None,
+    )
+    assert any("at least one of" in error for error in errors)
+
+
+def test_sighting_proposal_rejects_unknown_sighting_type():
+    errors = validate_sighting_proposal(
+        value="1.2.3.4",
+        event_id=None,
+        attribute_id=None,
+        sighting_type="9",
+        source=None,
+    )
+    assert any("sighting_type" in error for error in errors)
+
+
+def test_sighting_proposal_rejects_bad_event_id_and_blank_attribute_id():
+    errors = validate_sighting_proposal(
+        value=None,
+        event_id=0,
+        attribute_id="   ",
+        sighting_type="1",
+        source=None,
+    )
+    assert any("event_id" in error for error in errors)
+    assert any("attribute_id" in error for error in errors)
+
+
+def test_sighting_proposal_rejects_oversized_value_and_source():
+    errors = validate_sighting_proposal(
+        value="a" * 2049,
+        event_id=None,
+        attribute_id=None,
+        sighting_type="2",
+        source="b" * 5001,
+    )
+    assert any("value" in error for error in errors)
+    assert any("source" in error for error in errors)

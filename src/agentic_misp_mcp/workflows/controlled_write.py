@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hmac
 from typing import Any
 
 from agentic_misp_mcp.misp.client import MISPClient
@@ -16,6 +17,7 @@ from agentic_misp_mcp.policy.operation_hash import operation_hash
 from agentic_misp_mcp.policy.proposal_validation import (
     validate_attribute_proposal,
     validate_event_proposal,
+    validate_sighting_proposal,
 )
 
 # Static, internal-only metadata used to describe proposals/blocks. Not policy inputs.
@@ -84,7 +86,11 @@ def _approval_token_allows_execution(
 ) -> bool:
     if expected_approval_token is None:
         return True
-    return approval_token == expected_approval_token
+    if approval_token is None:
+        return False
+    return hmac.compare_digest(
+        approval_token.encode("utf-8"), expected_approval_token.encode("utf-8")
+    )
 
 
 def _proposal_result(
@@ -364,6 +370,11 @@ async def submit_ioc_with_approval_workflow(
         return _blocked_result(tool_name, decision)
     if guardrail is not None and not guardrail.allowed:
         return _guardrail_blocked_result(tool_name, decision, guardrail)
+    errors = validate_attribute_proposal(
+        event_id=event_id, type=type, value=value, category=category, comment=comment, to_ids=to_ids
+    )
+    if errors:
+        return _invalid_result(tool_name, decision, errors)
     payload = attribute_create_payload(
         type=type, value=value, category=category, comment=comment, to_ids=to_ids
     )
@@ -423,6 +434,15 @@ async def add_sighting_with_approval_workflow(
     tool_name = "add_sighting_with_approval"
     if not decision.allowed:
         return _blocked_result(tool_name, decision)
+    errors = validate_sighting_proposal(
+        value=value,
+        event_id=event_id,
+        attribute_id=attribute_id,
+        sighting_type=sighting_type,
+        source=source,
+    )
+    if errors:
+        return _invalid_result(tool_name, decision, errors)
     payload = sighting_create_payload(
         value=value,
         event_id=event_id,

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import ipaddress
+
 from agentic_misp_mcp.audit import AuditLogger
 from agentic_misp_mcp.config_check import validate_audit_log_path
 from agentic_misp_mcp.misp.client import MISPClient
@@ -27,13 +29,22 @@ def create_server(settings: Settings | None = None):
     return mcp
 
 
+def _is_loopback_host(host: str) -> bool:
+    if host.strip().lower() == "localhost":
+        return True
+    try:
+        return ipaddress.ip_address(host.strip()).is_loopback
+    except ValueError:
+        return False
+
+
 def validate_http_bind_allowed(settings: Settings, host: str) -> None:
-    if host == "0.0.0.0" and not settings.allow_insecure_http_bind:
+    if not _is_loopback_host(host) and not settings.allow_insecure_http_bind:
         raise StartupConfigurationError(
-            "Refusing to bind unauthenticated HTTP transport to 0.0.0.0. HTTP mode has no "
-            "built-in auth/TLS; use 127.0.0.1 or set "
-            "AGENTIC_MISP_MCP_ALLOW_INSECURE_HTTP_BIND=true only behind an authenticated "
-            "TLS-terminating gateway."
+            f"Refusing to bind unauthenticated HTTP transport to non-loopback host {host!r} "
+            "(e.g. 0.0.0.0, ::, or a LAN address). HTTP mode has no built-in auth/TLS; use "
+            "127.0.0.1 or set AGENTIC_MISP_MCP_ALLOW_INSECURE_HTTP_BIND=true only behind an "
+            "authenticated TLS-terminating gateway."
         )
 
 

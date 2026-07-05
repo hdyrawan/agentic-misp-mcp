@@ -130,7 +130,7 @@ reference.
 - This project's own MCP transport (stdio by default) has no TLS of its own — stdio runs over a
   local process pipe, which is the point of using it as the primary transport.
 - The experimental `--transport http` mode has no built-in authentication or TLS. It refuses to
-  bind `0.0.0.0` unless `AGENTIC_MISP_MCP_ALLOW_INSECURE_HTTP_BIND=true` is explicitly set, and
+  bind a non-loopback host (`0.0.0.0`, `::`, or a LAN address) unless `AGENTIC_MISP_MCP_ALLOW_INSECURE_HTTP_BIND=true` is explicitly set, and
   even then it must sit behind an authenticated, TLS-terminating gateway (reverse proxy or
   service mesh sidecar) that terminates TLS and enforces authentication before traffic reaches
   this server. HTTP mode without that gateway is not a supported production configuration.
@@ -248,7 +248,7 @@ Use separate deployments per role rather than one broad deployment that can do e
       authenticated, TLS-terminating gateway (reverse proxy or service mesh sidecar) that
       terminates TLS and enforces authentication before traffic reaches this server — see "TLS
       requirements" above. The example Compose file's HTTP service is commented out by default,
-      and HTTP mode itself refuses to bind `0.0.0.0` unless
+      and HTTP mode itself refuses to bind a non-loopback host (`0.0.0.0`, `::`, or a LAN address) unless
       `AGENTIC_MISP_MCP_ALLOW_INSECURE_HTTP_BIND=true` is explicitly set.
 - [ ] Run `agentic-misp-mcp config-check` and `agentic-misp-mcp config doctor` as part of your
       deployment pipeline (a pre-flight check in CI/CD or an init container) before starting the
