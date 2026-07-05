@@ -521,10 +521,51 @@ CI runs the same checks on Python 3.11 and 3.12.
 
 ## Contributing
 
-Contributions are welcome, but keep the project boundary intact: no raw API proxy, no secret
-passthrough, no unaudited tool path, and no write behavior without policy and approval gates.
-Start with `PROJECT_STATE.md`, [`docs/security.md`](docs/security.md), and
-`src/agentic_misp_mcp/tools/registry.py`.
+Contributions are welcome, but the project boundary is not up for debate in a PR: no raw MISP
+API proxy, no secret passthrough, no unaudited tool path, and no write behavior that skips the
+policy/approval gates. Before writing code, read `PROJECT_STATE.md`,
+[`docs/security.md`](docs/security.md), and `src/agentic_misp_mcp/tools/registry.py` so your
+change lands inside that boundary instead of against it.
+
+1. **Fork and branch.** Fork the repository and create a feature branch off `main` (for example
+   `fix/search-events-date-validation` or `feat/short-description`) — don't work directly on
+   `main`.
+2. **Make the change.** Keep the diff scoped to one concern. If you're touching a policy-gated
+   write tool, a scoring calculation, or anything under `misp/`, `policy/`, or `audit.py`, explain
+   the reasoning in your PR description — these paths get read closely (see "Security-sensitive
+   changes" below).
+3. **Add or update tests.** New behavior needs new test coverage; changed behavior needs its
+   existing tests updated to match. Run the suite locally:
+
+   ```bash
+   uv run pytest -q
+   ```
+
+4. **Run Ruff before you push.** Both lint and format are enforced in CI (`.github/workflows/ci.yml`)
+   and must pass clean:
+
+   ```bash
+   uv run ruff check .
+   uv run ruff format --check .
+   ```
+
+   (`make check` runs all three — lint, format check, and tests — in one command.)
+5. **Write clear commits.** Each commit should describe one change and *why* it was made, not
+   just what changed — the diff already shows what changed. Squash exploratory or fixup commits
+   before opening the PR.
+6. **Open the pull request with real context.** Describe the problem, the fix, and how you
+   verified it (test output, and live-lab evidence if you ran any against a real MISP instance).
+   State explicitly whether the change affects the MCP tool surface, scoring behavior, or the
+   write/approval workflow — reviewers will check that claim against the diff.
+
+### Security-sensitive changes
+
+Anything touching credential handling, the policy engine, approval workflows, audit logging, or
+the MISP client's write methods gets extra scrutiny before merge — that's the core of this
+project's safety model, not incidental code. Do not include real MISP URLs, API keys, tokens, or
+production event data in commits, issues, or PR descriptions; use the placeholders already used
+throughout this README and `.env.example`. If you find a security issue rather than proposing a
+fix, follow the reporting process in [`SECURITY.md`](SECURITY.md) instead of opening a public PR.
 
 
 
