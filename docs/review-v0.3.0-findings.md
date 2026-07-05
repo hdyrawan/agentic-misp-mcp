@@ -56,6 +56,17 @@ request path, relying on the registry annotation to keep it an int.
 **Fix:** the workflow itself now requires a positive integer (bool excluded) before any request
 is built.
 
+### F6 — event discovery fetched full events and hit the response-size cap (medium, found in live e2e)
+
+`search_events`/`find_events_by_tag` requested full event JSON from `/events/restSearch`; on
+the live lab a 5-event date-range query exceeded the 5 MB
+`AGENTIC_MISP_MCP_MAX_RESPONSE_BYTES` cap and failed closed (clean error, no crash) even though
+both tools only build compact summaries.
+
+**Fix:** both payloads now request `metadata: true` (same 5 events: ~16 KB instead of >5 MB;
+tags still included), and `parse_event` falls back to the event's own `attribute_count` field
+when no attributes are present in the response.
+
 ## Reviewed and found sound
 
 - **Feed secret redaction** (`workflows/feed_health.py`): feed URLs are redacted for userinfo

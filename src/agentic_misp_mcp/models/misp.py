@@ -176,7 +176,8 @@ def parse_event(raw: dict[str, Any], attribute_limit: int) -> MISPEventSummary:
         publish_timestamp=parse_misp_datetime(event.get("publish_timestamp")),
         published=event.get("published") if isinstance(event.get("published"), bool) else None,
         tags=parse_tags(event.get("Tag") or event.get("tags")),
-        attribute_count=len(raw_attributes),
+        # Metadata-only restSearch responses omit Attribute but carry the count as a field.
+        attribute_count=len(raw_attributes) or _coerce_event_id(event.get("attribute_count")) or 0,
         attributes_by_type=counts,
         attributes=attributes,
     )

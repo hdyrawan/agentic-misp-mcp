@@ -21,6 +21,10 @@ def event_tag_search_payload(tag: str, limit: int) -> dict[str, object]:
         "returnFormat": "json",
         "tags": [tag],
         "limit": limit,
+        # Metadata-only: event discovery needs summaries, and full-event responses from
+        # large instances blow past AGENTIC_MISP_MCP_MAX_RESPONSE_BYTES (observed live:
+        # >5 MB full vs ~16 KB metadata for the same 5 events).
+        "metadata": True,
     }
 
 
@@ -43,6 +47,8 @@ def event_search_payload(
     payload: dict[str, object] = {
         "returnFormat": "json",
         "limit": limit,
+        # Metadata-only responses; see event_tag_search_payload for why.
+        "metadata": True,
     }
     # MISP restSearch date-range params are `from`/`to`. It silently ignores unknown
     # params (`datefrom`/`dateto` returned unfiltered results on live 2.5.42), so the
