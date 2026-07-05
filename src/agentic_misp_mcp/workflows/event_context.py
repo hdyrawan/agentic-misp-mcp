@@ -52,6 +52,11 @@ async def expand_related_events(
                 "id": event.id,
                 "info": event.info,
                 "date": event.date,
+                "timestamp": event.timestamp.isoformat() if event.timestamp else None,
+                "publish_timestamp": (
+                    event.publish_timestamp.isoformat() if event.publish_timestamp else None
+                ),
+                "published": event.published,
                 "threat_level_id": event.threat_level_id,
                 "analysis": event.analysis,
                 "tags": event.tags,

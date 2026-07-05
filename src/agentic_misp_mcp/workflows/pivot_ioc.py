@@ -11,6 +11,7 @@ from agentic_misp_mcp.workflows.event_context import (
     expand_related_events,
     select_related_event_ids,
 )
+from agentic_misp_mcp.workflows.intel_freshness import build_freshness_from_expanded_events
 from agentic_misp_mcp.workflows.investigation_engine import classify_tags, extract_related_iocs
 
 
@@ -45,6 +46,9 @@ async def pivot_ioc_workflow(
     return {
         "ioc": {"value": ioc.value, "type": ioc.type.value},
         "source_match_count": len(matches),
+        "freshness": build_freshness_from_expanded_events(
+            matches, related_events, settings=settings
+        ),
         "related_event_count": len(related_events),
         "related_events": related_events,
         "related_iocs": related_iocs,

@@ -21,6 +21,16 @@ async def generate_markdown_ioc_report_workflow(
     return _render_markdown(report)
 
 
+def _render_freshness_line(freshness: dict | None) -> str:
+    if not freshness:
+        return "unknown"
+    label = freshness.get("label", "unknown")
+    age = freshness.get("newest_signal_age_days")
+    if age is None:
+        return f"{label} (no intel timestamps available)"
+    return f"{label} (newest signal {age} day(s) old)"
+
+
 def _render_markdown(report: dict) -> str:
     ioc = report["ioc"]
     misp_findings = report["misp_findings"]
@@ -36,6 +46,7 @@ def _render_markdown(report: dict) -> str:
                     f"- **Verdict:** {report['verdict']}",
                     f"- **Confidence:** {report['confidence']} "
                     f"(score {report['confidence_score']}/100)",
+                    f"- **Intel freshness:** {_render_freshness_line(report.get('freshness'))}",
                 ]
             ),
         ),

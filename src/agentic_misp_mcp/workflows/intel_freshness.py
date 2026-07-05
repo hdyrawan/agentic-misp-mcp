@@ -4,7 +4,11 @@ from datetime import datetime, timezone
 from enum import StrEnum
 from typing import Any
 
-from agentic_misp_mcp.models.misp import MISPAttributeSummary, MISPEventSummary
+from agentic_misp_mcp.models.misp import (
+    MISPAttributeSummary,
+    MISPEventSummary,
+    parse_misp_datetime,
+)
 from agentic_misp_mcp.settings import Settings
 
 
@@ -111,6 +115,29 @@ def build_freshness(
             "stale": settings.freshness_stale_days,
         },
     }
+
+
+def build_freshness_from_expanded_events(
+    matches: list[MISPAttributeSummary],
+    related_events: list[dict[str, Any]],
+    *,
+    settings: Settings,
+    now: datetime | None = None,
+) -> dict[str, Any]:
+    """Build the freshness block from `event_context.expand_related_events` dicts.
+
+    Errored event entries carry no timestamps and are skipped.
+    """
+    events = [
+        MISPEventSummary(
+            id=int(event.get("id") or 0),
+            timestamp=parse_misp_datetime(event.get("timestamp")),
+            publish_timestamp=parse_misp_datetime(event.get("publish_timestamp")),
+        )
+        for event in related_events
+        if event.get("status") != "error"
+    ]
+    return build_freshness(matches, events, settings=settings, now=now)
 
 
 def _newest(values: Any) -> datetime | None:
