@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 This project has mocked test coverage plus live-lab validation (read-only and controlled-write)
 against MISP `2.5.42`; broader MISP version compatibility testing is still pending.
 
-## Unreleased
+## v0.2.1 (2026-07-05) — security-review hardening
 
 Security-review hardening pass over the `v0.2.0` GA code (no new tools, no new MISP write
 capability):
