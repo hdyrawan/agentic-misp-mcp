@@ -12,12 +12,14 @@ COPY src ./src
 RUN python -m pip install --upgrade pip \
     && python -m pip install . \
     && useradd --create-home --shell /usr/sbin/nologin appuser \
-    && mkdir -p /app/logs \
+    && mkdir -p /app/logs /app/approvals \
     && chown -R appuser:appuser /app
 
 USER appuser
 
 EXPOSE 8000
+
+VOLUME ["/app/logs", "/app/approvals"]
 
 ENTRYPOINT ["agentic-misp-mcp"]
 CMD ["--transport", "stdio"]

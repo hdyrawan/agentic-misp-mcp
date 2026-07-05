@@ -64,7 +64,11 @@ When `AGENTIC_MISP_MCP_APPROVAL_TOKEN` is set, a role-allowed approved call must
 matching `approval_token`; missing or incorrect tokens return `blocked`. If the environment token
 is unset, the older `approved=true` behavior is preserved for backward compatibility.
 `propose_event`/`propose_attribute` never call MISP regardless of approval. Approval decisions
-are modeled and fully audited; there is no persistent approval storage across process restarts.
+are modeled and fully audited. In the default `lab` approval mode, approval is an in-process
+programmatic gate for development and validation. In `production` approval mode, approval requests
+for the four `_with_approval` write tools are persisted in the SQLite store configured by
+`AGENTIC_MISP_MCP_APPROVAL_STORE_PATH`; approved records are TTL-bound, one-time-use, and bound to
+the exact canonical operation hash across process restarts.
 `propose_event`/`propose_attribute` also validate the proposed payload before building it
 (`v0.2.0-rc.1`): required fields, `distribution`/`threat_level_id`/`analysis` ranges, and a
 known-vocabulary attribute type/category allowlist. A malformed or unsupported payload returns
@@ -153,8 +157,24 @@ TLS-terminating gateway and audit logs are monitored closely.
 
 ```bash
 docker build -t agentic-misp-mcp:local .
-docker run --rm --env-file .env -v "$PWD/logs:/app/logs" agentic-misp-mcp:local config-check
-docker run --rm -i --env-file .env -v "$PWD/logs:/app/logs" agentic-misp-mcp:local --transport stdio
+docker run --rm --env-file .env \
+  -v /path/to/agentic-misp-mcp/logs:/app/logs \
+  agentic-misp-mcp:local config-check
+docker run --rm -i --env-file .env \
+  -v /path/to/agentic-misp-mcp/logs:/app/logs \
+  agentic-misp-mcp:local --transport stdio
+```
+
+For production-write Docker deployments, persist both the audit log directory and the SQLite
+approval store directory. Set `AGENTIC_MISP_MCP_AUDIT_LOG_PATH=/app/logs/audit.jsonl` and
+`AGENTIC_MISP_MCP_APPROVAL_STORE_PATH=/app/approvals/approvals.sqlite3`, then mount host-owned
+directories with permissions that are not group/world writable:
+
+```bash
+docker run --rm -i --env-file /path/to/agentic-misp-mcp/.env.production-write \
+  -v /path/to/agentic-misp-mcp/logs:/app/logs \
+  -v /path/to/agentic-misp-mcp/approvals:/app/approvals \
+  agentic-misp-mcp:local --transport stdio
 ```
 
 ## Docker Compose

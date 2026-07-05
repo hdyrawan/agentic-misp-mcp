@@ -1,13 +1,13 @@
 # Security model
 
-This MIT-licensed project is intentionally workflow-first and in early development. Live
-read-only validation and core controlled-write validation have both passed against a
-non-production MISP lab (see `README.md`'s "Live lab validation status" table and
-`docs/live-validation-plan.md`). Production deployment itself is **not yet validated**: broader
-MISP version compatibility, edge-case validation (rate limits, timeouts, TLS failure modes, large
-result sets, warninglist endpoint compatibility), and production hardening all remain pending —
-see [`docs/production-readiness.md`](production-readiness.md) for the full scope and checklist.
-Do not treat this project as production software yet.
+This MIT-licensed project is intentionally workflow-first. `v0.2.1` has passed live validation
+against MISP `2.5.42` in a non-production lab, including Docker runtime, stdio transport, MCP
+Inspector, read-only workflows, all four controlled-write tools, `propose_event`/
+`propose_attribute` validation, TLS fail-closed behavior, timeout and response-size limits,
+warninglist behavior, runtime-only secrets, audit logging, production approval mode, and the HTTP
+bind guardrail. Production readiness is bounded to that documented MCP server scope; this project
+is still not a raw MISP API proxy, SIEM/SOAR platform, enterprise monitoring system, or generic
+MISP administration interface.
 
 ## Read-only by default; controlled write behind policy and approval
 
@@ -81,7 +81,7 @@ The original 13 read tools are classified as `read` and remain allowed under `re
 - No write ever happens silently: every branch above (including `blocked`) is audited, and only
   the `executed`/`failed` branches invoke a narrow MISP write method (`add_attribute`,
   `add_sighting`, `tag_event`, `publish_event` in `misp/client.py`). There is no event-creation
-  MCP tool and no `submit_event_with_approval` in v0.1. There is no generic request proxy.
+  approval tool and no generic request proxy.
 
 ## MCP tool boundary
 
@@ -156,6 +156,11 @@ without baking secrets or runtime state into the image.
 - Run `agentic-misp-mcp config-check` before starting the server.
 - Keep `.env` files out of git and pass them only at runtime.
 - The Docker image runs as a non-root user.
+- For production-write Docker deployments, persist both `/app/logs` and `/app/approvals`; configure
+  `AGENTIC_MISP_MCP_AUDIT_LOG_PATH=/app/logs/audit.jsonl` and
+  `AGENTIC_MISP_MCP_APPROVAL_STORE_PATH=/app/approvals/approvals.sqlite3` so audit evidence and
+  SQLite approval state survive container replacement. The approval database and parent directory
+  must not be group/world writable.
 - The Docker image exposes port `8000` only for optional experimental HTTP mode; stdio remains the
   primary supported transport.
 - Do not bake `MISP_URL` or `MISP_API_KEY` into Dockerfiles, images, or committed config.

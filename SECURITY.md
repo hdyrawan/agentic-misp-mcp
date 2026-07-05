@@ -2,13 +2,15 @@
 
 ## Project status
 
-`agentic-misp-mcp` is an MIT-licensed project in early development. It has been tested with mocked MISP responses only; live MISP compatibility testing and production security review are still pending. Do not treat the current branch or any `0.1.x` package as production software.
+`agentic-misp-mcp` is an MIT-licensed project with `0.2.x` releases validated for the documented MCP server scope: workflow-first read tools plus policy- and approval-gated controlled writes. `v0.2.1` passed live validation against MISP `2.5.42` using Docker, stdio transport, MCP Inspector, runtime-only secrets, audit logging, production approval mode, and the documented HTTP bind guardrail. Treat production readiness as bounded to that scope; it is not a raw MISP API proxy, SIEM/SOAR platform, or generic MISP administration surface.
 
 ## Supported versions
 
 | Version | Status |
 | --- | --- |
-| `main` / unreleased `0.1.x` | Early development; security fixes are best-effort before a stable release. |
+| `0.2.x` | Supported for security fixes within the documented production-ready MCP scope. |
+| `main` / unreleased changes | Best-effort support until released; security fixes may land here before the next `0.2.x` release. |
+| `0.1.x` | Not supported. Upgrade to `0.2.x`. |
 | Older commits and branches | Not supported. |
 
 ## Reporting vulnerabilities

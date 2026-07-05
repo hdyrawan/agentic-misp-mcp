@@ -1,6 +1,6 @@
 # Testing
 
-`agentic-misp-mcp` is tested with **mocked MISP responses only**. No test in this repository
+`agentic-misp-mcp`'s automated test suite uses **mocked MISP responses**. No test in this repository
 calls a live MISP instance, and none should be added without going through the live lab
 validation phase described in [`docs/live-validation-plan.md`](live-validation-plan.md).
 
