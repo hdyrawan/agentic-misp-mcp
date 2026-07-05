@@ -242,3 +242,51 @@ async def test_no_config_doctor_or_approvals_prune_mcp_tools_exist(settings, tmp
         assert "prune" not in lowered
         assert "vacuum" not in lowered
     assert len(mcp.tools) == 19
+
+
+@pytest.mark.asyncio
+async def test_read_tool_dict_responses_carry_envelope_fields(settings, tmp_path):
+    mcp = FakeMCP()
+    audit = AuditLogger(tmp_path / "audit.jsonl")
+    register_tools(mcp, client=FakeClient(), settings=settings, audit_logger=audit)
+
+    search_result = await mcp.tools["search_ioc"]("1.2.3.4", 20)
+    investigate_result = await mcp.tools["investigate_ioc"]("1.2.3.4", 20)
+    warninglist_result = await mcp.tools["check_warninglists"]("1.2.3.4")
+
+    for tool_name, result in (
+        ("search_ioc", search_result),
+        ("investigate_ioc", investigate_result),
+        ("check_warninglists", warninglist_result),
+    ):
+        assert result["tool_name"] == tool_name
+        assert result["schema_version"] == 1
+
+
+@pytest.mark.asyncio
+async def test_markdown_read_tools_stay_plain_strings(settings, tmp_path):
+    mcp = FakeMCP()
+    audit = AuditLogger(tmp_path / "audit.jsonl")
+    register_tools(mcp, client=FakeClient(), settings=settings, audit_logger=audit)
+
+    result = await mcp.tools["generate_markdown_ioc_report"]("1.2.3.4")
+
+    assert isinstance(result, str)
+    assert "Intel freshness" in result
+
+
+@pytest.mark.asyncio
+async def test_investigate_and_pivot_responses_include_freshness_block(settings, tmp_path):
+    mcp = FakeMCP()
+    audit = AuditLogger(tmp_path / "audit.jsonl")
+    register_tools(mcp, client=FakeClient(), settings=settings, audit_logger=audit)
+
+    investigate_result = await mcp.tools["investigate_ioc"]("1.2.3.4", 20)
+    pivot_result = await mcp.tools["pivot_ioc"]("1.2.3.4", 20)
+    report_result = await mcp.tools["generate_ioc_report"]("1.2.3.4")
+
+    for result in (investigate_result, pivot_result, report_result):
+        freshness = result["freshness"]
+        assert freshness["label"] in {"fresh", "aging", "stale", "expired", "unknown"}
+        assert set(freshness["thresholds_days"]) == {"fresh", "aging", "stale"}
+        assert 0.0 <= freshness["age_weight"] <= 1.0

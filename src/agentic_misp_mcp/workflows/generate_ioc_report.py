@@ -47,6 +47,7 @@ async def generate_ioc_report_workflow(
         "verdict": verdict,
         "confidence": investigation["confidence"],
         "confidence_score": investigation["confidence_score"],
+        "freshness": investigation["freshness"],
         "key_findings": key_findings,
         "misp_findings": {
             "match_count": match_count,

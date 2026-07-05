@@ -33,6 +33,7 @@ async def investigate_ioc_workflow(
         related_events=related_events,
         warninglists=warninglists,
         tags=tags,
+        settings=settings,
     )
     assessment_summary = _build_assessment_summary(
         seen_in_misp=bool(matches),
@@ -52,6 +53,7 @@ async def investigate_ioc_workflow(
         "confidence_score": enrichment["confidence_score"],
         "confidence_reasons": enrichment["confidence_reasons"],
         "match_count": len(matches),
+        "freshness": enrichment["freshness"],
         "related_events": related_events,
         "related_iocs": enrichment["related_iocs"],
         "warninglists": {

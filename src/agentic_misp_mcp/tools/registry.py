@@ -37,6 +37,10 @@ from agentic_misp_mcp.workflows.pivot_ioc import pivot_ioc_workflow
 from agentic_misp_mcp.workflows.search_ioc import search_ioc_workflow
 from agentic_misp_mcp.workflows.summarize_event import summarize_event_workflow
 
+# Version of the read-tool response schema. Bump only on additive changes; removing or
+# retyping fields requires a new major project version, not just a schema bump.
+READ_SCHEMA_VERSION = 1
+
 ALLOWED_TOOL_NAMES = {
     "search_ioc",
     "investigate_ioc",
@@ -91,7 +95,18 @@ def register_tools(
     ) -> Any:
         decision = policy_engine.decide(tool_name=tool_name, action=Action.READ)
         enforce_policy(decision)
-        return await audit_call(audit, tool_name, arguments, call, policy_decision=decision)
+
+        async def enveloped() -> Any:
+            # Common read-response envelope (plan §1.1): dict responses carry their tool
+            # name and a schema version so agents can detect additive schema evolution.
+            # Markdown tools return plain strings and stay unwrapped.
+            result = await call()
+            if isinstance(result, dict):
+                result.setdefault("tool_name", tool_name)
+                result.setdefault("schema_version", READ_SCHEMA_VERSION)
+            return result
+
+        return await audit_call(audit, tool_name, arguments, enveloped, policy_decision=decision)
 
     async def _audit_write_tool(
         tool_name: str,
