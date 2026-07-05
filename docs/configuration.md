@@ -29,6 +29,11 @@ TLS, and secret-handling requirements before deploying against a real MISP insta
 | `AGENTIC_MISP_MCP_APPROVAL_TOKEN` | No | unset | Optional approval-token enforcement. When set and approval is required, `approved=true` calls must also include the matching `approval_token`. The token is redacted from audit logs and config-check output. |
 | `AGENTIC_MISP_MCP_MAX_RESPONSE_BYTES` | No | `5242880` | Maximum MISP HTTP response body size. Checked before JSON parsing using both `Content-Length` and actual bytes read. |
 | `AGENTIC_MISP_MCP_ALLOW_INSECURE_HTTP_BIND` | No | `false` | Permit experimental HTTP transport to bind a non-loopback host (e.g. `0.0.0.0` or `::`). Leave false unless the server is behind an authenticated TLS-terminating gateway. |
+| `AGENTIC_MISP_MCP_FRESHNESS_FRESH_DAYS` | No | `30` | Intel freshness label threshold: newest signal at or below this many days is `fresh`. Must be less than the aging threshold. |
+| `AGENTIC_MISP_MCP_FRESHNESS_AGING_DAYS` | No | `90` | Intel freshness label threshold: `aging` upper bound. Must sit between the fresh and stale thresholds. |
+| `AGENTIC_MISP_MCP_FRESHNESS_STALE_DAYS` | No | `365` | Intel freshness label threshold: `stale` upper bound; older signals are `expired`. |
+| `AGENTIC_MISP_MCP_AGE_WEIGHTING` | No | `true` | Apply age-aware weighting to IOC scoring. `false` reproduces pre-v0.3.0 scoring exactly; the `freshness` response block is emitted either way. |
+| `AGENTIC_MISP_MCP_AGE_WEIGHTS` | No | `1.0,0.75,0.4,0.15` | Score multipliers for fresh/aging/stale/expired intel. Four comma-separated values, each between 0 and 1. Penalties (warninglist/benign tags) are never discounted. |
 | `AGENTIC_MISP_MCP_FEED_FRESH_DAYS` | No | `7` | Feed health threshold: fetch/cache ages at or below this are considered fresh. Must be at least `1` and less than `AGENTIC_MISP_MCP_FEED_STALE_DAYS`. |
 | `AGENTIC_MISP_MCP_FEED_STALE_DAYS` | No | `30` | Feed health threshold: fetch/cache ages above this are stale/cache-stale. Must be greater than `AGENTIC_MISP_MCP_FEED_FRESH_DAYS`. |
 

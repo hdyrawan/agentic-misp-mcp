@@ -33,8 +33,8 @@ was not performed (no safe way to trigger one in this lab).
   certification against `production-readiness.md`'s broader, stricter checklist (multi-version
   MISP compatibility, live HTTP 429, supply-chain scanning, signed releases); see
   ga-production-readiness-plan.md for what's next beyond this GA claim.
-- Current MCP tool count: 26 (M3 adds seven read-only observability tools; config doctor/
-  approvals prune/the validation layer are not MCP tools).
+- Current MCP tool count: 25 (v0.3.0 adds six read-only tools: sightings/event search/status
+  plus feed observability; config doctor/approvals prune/the validation layer are not MCP tools).
 - Primary transport: stdio.
 - HTTP transport is experimental.
 - Python 3.11+.
@@ -158,7 +158,6 @@ Pivoting and event intelligence:
 - list_feeds
 - get_feed_status
 - summarize_feed_health
-- propose_feed_changes (dry-run read action; returns proposal_only and never mutates MISP)
 
 Reporting:
 

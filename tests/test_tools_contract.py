@@ -70,12 +70,12 @@ class FakeClient:
 
 
 @pytest.mark.asyncio
-async def test_exactly_twenty_six_tools_registered_and_audited(settings, tmp_path):
+async def test_exactly_twenty_five_tools_registered_and_audited(settings, tmp_path):
     mcp = FakeMCP()
     audit = AuditLogger(tmp_path / "audit.jsonl")
     register_tools(mcp, client=FakeClient(), settings=settings, audit_logger=audit)
 
-    assert len(ALLOWED_TOOL_NAMES) == 26
+    assert len(ALLOWED_TOOL_NAMES) == 25
     assert set(mcp.tools) == ALLOWED_TOOL_NAMES
 
     result = await mcp.tools["search_ioc"]("1.2.3.4", 20)
@@ -151,7 +151,7 @@ async def test_no_shell_filesystem_or_secret_passthrough_tools(settings, tmp_pat
         "token",
     )
 
-    assert len(mcp.tools) == 26
+    assert len(mcp.tools) == 25
     for name, func in mcp.tools.items():
         lowered_name = name.lower()
         assert not any(term in lowered_name for term in forbidden_tool_terms), name
@@ -226,13 +226,11 @@ async def test_m3_feed_observability_tools_are_registered_and_audited(settings, 
         "list_feeds": lambda: mcp.tools["list_feeds"](50, True),
         "get_feed_status": lambda: mcp.tools["get_feed_status"](1),
         "summarize_feed_health": lambda: mcp.tools["summarize_feed_health"](100),
-        "propose_feed_changes": lambda: mcp.tools["propose_feed_changes"]("hygiene"),
     }
     results = {}
     for name, call in calls.items():
         results[name] = await call()
 
-    assert results["propose_feed_changes"]["status"] == "proposal_only"
     lines = (tmp_path / "audit.jsonl").read_text().strip().splitlines()
     records = [json.loads(line) for line in lines]
     assert {record["tool"] for record in records} == set(calls)
@@ -292,7 +290,7 @@ async def test_no_config_doctor_or_approvals_prune_mcp_tools_exist(settings, tmp
         assert "doctor" not in lowered
         assert "prune" not in lowered
         assert "vacuum" not in lowered
-    assert len(mcp.tools) == 26
+    assert len(mcp.tools) == 25
 
 
 @pytest.mark.asyncio

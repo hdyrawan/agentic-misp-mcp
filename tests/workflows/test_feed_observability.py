@@ -7,7 +7,6 @@ import pytest
 from agentic_misp_mcp.workflows.feed_health import feed_status, redact_feed_url
 from agentic_misp_mcp.workflows.get_feed_status import get_feed_status_workflow
 from agentic_misp_mcp.workflows.list_feeds import list_feeds_workflow
-from agentic_misp_mcp.workflows.propose_feed_changes import propose_feed_changes_workflow
 from agentic_misp_mcp.workflows.summarize_feed_health import summarize_feed_health_workflow
 
 
@@ -117,18 +116,3 @@ def test_redact_feed_url_handles_credentials_and_query_secrets():
     assert "foo=bar" in redacted
     assert "pass" not in redacted
     assert "abc" not in redacted
-
-
-@pytest.mark.asyncio
-async def test_propose_feed_changes_is_dry_run_only():
-    result = await propose_feed_changes_workflow(goal="improve lookup")
-
-    assert result["status"] == "proposal_only"
-    assert result["requires_operator_approval"] is True
-    assert result["mutates_misp"] is False
-    assert {item["action"] for item in result["proposals"]} == {
-        "improve_lookup_coverage",
-        "reduce_stale_feeds",
-        "review_disabled_feeds",
-        "optimize_feed_hygiene",
-    }

@@ -136,3 +136,29 @@ async def test_get_misp_status_reports_baseline_and_warninglists():
         "version_tested": True,
         "warninglists_available": True,
     }
+
+
+@pytest.mark.asyncio
+async def test_search_events_rejects_malformed_dates(settings):
+    client = FakeClient()
+
+    with pytest.raises(ValueError, match="date_from must be a YYYY-MM-DD date"):
+        await search_events_workflow(client, settings, date_from="last week")
+    with pytest.raises(ValueError, match="date_to must be a YYYY-MM-DD date"):
+        await search_events_workflow(client, settings, date_to="2026/07/05")
+
+
+@pytest.mark.asyncio
+async def test_search_events_rejects_oversized_org(settings):
+    with pytest.raises(ValueError, match="org must be"):
+        await search_events_workflow(FakeClient(), settings, org="x" * 256)
+
+
+@pytest.mark.asyncio
+async def test_get_feed_status_rejects_non_positive_or_non_int_feed_id(settings):
+    from agentic_misp_mcp.workflows.get_feed_status import get_feed_status_workflow
+
+    with pytest.raises(ValueError, match="feed_id must be a positive integer"):
+        await get_feed_status_workflow(FakeClient(), settings, 0)
+    with pytest.raises(ValueError, match="feed_id must be a positive integer"):
+        await get_feed_status_workflow(FakeClient(), settings, "1")

@@ -44,10 +44,13 @@ def event_search_payload(
         "returnFormat": "json",
         "limit": limit,
     }
+    # MISP restSearch date-range params are `from`/`to`. It silently ignores unknown
+    # params (`datefrom`/`dateto` returned unfiltered results on live 2.5.42), so the
+    # names here are load-bearing: a wrong name means unfiltered data, not an error.
     if date_from is not None:
-        payload["datefrom"] = date_from
+        payload["from"] = date_from
     if date_to is not None:
-        payload["dateto"] = date_to
+        payload["to"] = date_to
     if published is not None:
         payload["published"] = published
     if org is not None:

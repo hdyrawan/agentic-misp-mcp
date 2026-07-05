@@ -257,8 +257,6 @@ def test_warninglist_penalty_not_discounted_for_old_intel(monkeypatch, tmp_path,
         now=NOW,
     )
 
-    factors = {
-        reason.split(":")[0]: reason for reason in enrichment["confidence_reasons"]
-    }
+    factors = {reason.split(":")[0]: reason for reason in enrichment["confidence_reasons"]}
     assert "warninglist_hit" in factors
     assert "-30" in factors["warninglist_hit"]

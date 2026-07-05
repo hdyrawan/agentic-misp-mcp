@@ -368,8 +368,8 @@ async def test_search_events_uses_bounded_filters_and_skips_malformed(settings):
         "body": {
             "returnFormat": "json",
             "limit": 20,
-            "datefrom": "2026-07-01",
-            "dateto": "2026-07-05",
+            "from": "2026-07-01",
+            "to": "2026-07-05",
             "published": True,
             "org": "CIRCL",
         },

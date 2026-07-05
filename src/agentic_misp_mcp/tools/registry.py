@@ -38,7 +38,6 @@ from agentic_misp_mcp.workflows.get_misp_status import get_misp_status_workflow
 from agentic_misp_mcp.workflows.investigate_ioc import investigate_ioc_workflow
 from agentic_misp_mcp.workflows.list_feeds import list_feeds_workflow
 from agentic_misp_mcp.workflows.pivot_ioc import pivot_ioc_workflow
-from agentic_misp_mcp.workflows.propose_feed_changes import propose_feed_changes_workflow
 from agentic_misp_mcp.workflows.search_events import search_events_workflow
 from agentic_misp_mcp.workflows.search_ioc import search_ioc_workflow
 from agentic_misp_mcp.workflows.summarize_event import summarize_event_workflow
@@ -68,7 +67,6 @@ ALLOWED_TOOL_NAMES = {
     "list_feeds",
     "get_feed_status",
     "summarize_feed_health",
-    "propose_feed_changes",
     "propose_event",
     "propose_attribute",
     "submit_ioc_with_approval",
@@ -305,15 +303,6 @@ def register_tools(
             "summarize_feed_health",
             {"limit": limit},
             lambda: summarize_feed_health_workflow(client, settings, limit),
-        )
-
-    async def propose_feed_changes(goal: str | None = None) -> dict[str, object]:
-        """Return dry-run feed operator recommendations without mutating MISP."""
-        return await _audit_read_tool(
-            audit_logger,
-            "propose_feed_changes",
-            {"goal": goal},
-            lambda: propose_feed_changes_workflow(goal),
         )
 
     async def generate_event_report(event_id: int) -> dict[str, object]:
@@ -584,7 +573,6 @@ def register_tools(
     _register(mcp, "list_feeds", list_feeds)
     _register(mcp, "get_feed_status", get_feed_status)
     _register(mcp, "summarize_feed_health", summarize_feed_health)
-    _register(mcp, "propose_feed_changes", propose_feed_changes)
     _register(mcp, "propose_event", propose_event)
     _register(mcp, "propose_attribute", propose_attribute)
     _register(mcp, "submit_ioc_with_approval", submit_ioc_with_approval)

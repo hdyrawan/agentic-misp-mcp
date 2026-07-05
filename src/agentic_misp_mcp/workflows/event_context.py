@@ -70,6 +70,19 @@ async def expand_related_events(
     return related_events
 
 
+def event_summary(event: Any) -> dict[str, object]:
+    """Compact event listing shape shared by event-discovery workflows."""
+    return {
+        "event_id": event.id,
+        "info": event.info,
+        "date": event.date,
+        "threat_level": event.threat_level_id,
+        "analysis": event.analysis,
+        "attribute_count": event.attribute_count,
+        "tags": event.tags,
+    }
+
+
 def collect_tags(*, matches: list[Any], related_events: list[dict[str, Any]]) -> list[str]:
     tags = {tag for match in matches for tag in match.tags}
     for event in related_events:

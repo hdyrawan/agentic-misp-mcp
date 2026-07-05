@@ -107,7 +107,6 @@ Twenty-six tools are exposed. The read-only tools:
 - `list_feeds`
 - `get_feed_status`
 - `summarize_feed_health`
-- `propose_feed_changes` (dry-run proposal-only feed recommendations; never mutates MISP)
 
 Plus six Phase 8 controlled write tools:
 

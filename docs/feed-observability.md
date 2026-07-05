@@ -7,7 +7,6 @@ M3 adds safe, read-only MISP feed observability. These tools help an analyst und
 - `list_feeds(limit=50, enabled=None)` — lists configured feeds in a bounded response. Sensitive URL query parameters and authentication metadata are redacted.
 - `get_feed_status(feed_id)` — returns redacted details for one feed, including `age_days_since_fetch`, `age_days_since_cache`, `health_label`, and warnings when timestamps are missing or stale.
 - `summarize_feed_health(limit=100)` — groups configured feeds by health label: `healthy`, `stale`, `never_fetched`, `disabled`, `cache_stale`, `error`, and `unknown`.
-- `propose_feed_changes(goal=None)` — dry-run only. It returns `status: "proposal_only"`, rationale, risk notes, and `requires_operator_approval: true`; it never calls a MISP write/admin endpoint.
 
 ## Health thresholds
 
