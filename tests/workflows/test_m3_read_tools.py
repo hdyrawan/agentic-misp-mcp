@@ -149,6 +149,30 @@ async def test_search_events_rejects_malformed_dates(settings):
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "invalid_date",
+    ["2026-13-45", "2026-02-30", "2026-00-10", "2026-01-00"],
+)
+async def test_search_events_rejects_invalid_calendar_dates(settings, invalid_date):
+    client = FakeClient()
+
+    with pytest.raises(ValueError, match="date_from must be a valid YYYY-MM-DD date"):
+        await search_events_workflow(client, settings, date_from=invalid_date)
+    with pytest.raises(ValueError, match="date_to must be a valid YYYY-MM-DD date"):
+        await search_events_workflow(client, settings, date_to=invalid_date)
+
+
+@pytest.mark.asyncio
+async def test_search_events_accepts_valid_calendar_date(settings):
+    client = FakeClient()
+
+    result = await search_events_workflow(client, settings, date_from="2026-07-05")
+
+    assert client.event_kwargs["date_from"] == "2026-07-05"
+    assert result["filters"]["date_from"] == "2026-07-05"
+
+
+@pytest.mark.asyncio
 async def test_search_events_rejects_oversized_org(settings):
     with pytest.raises(ValueError, match="org must be"):
         await search_events_workflow(FakeClient(), settings, org="x" * 256)

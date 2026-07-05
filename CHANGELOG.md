@@ -5,6 +5,38 @@ All notable changes to this project will be documented in this file.
 This project has mocked test coverage plus live-lab validation (read-only and controlled-write)
 against MISP `2.5.42`; broader MISP version compatibility testing is still pending.
 
+## v0.3.2 (2026-07-05) — date-validation hardening patch
+
+Minimal hardening release based on external review of `v0.3.1` (commit `681fe17`). No MCP tool
+changes (count stays 25), no scoring behavior changes, no write-surface or approval-workflow
+changes, no API/response-shape changes.
+
+### Fixed
+
+- **`search_events` date filters accepted calendar-invalid dates**: `date_from`/`date_to`
+  validation checked only the `YYYY-MM-DD` shape via regex, so values like `2026-13-45` or
+  `2026-02-30` passed validation and were forwarded to MISP, which silently ignores parameters
+  it cannot parse. `_validate_date` now also parses the value with
+  `datetime.strptime(value, "%Y-%m-%d")` and rejects anything calendar-invalid with a safe,
+  non-secret-bearing error message. Valid dates and the existing MISP `from`/`to` parameter
+  mapping are unchanged.
+
+### Changed
+
+- `docs/security.md`: corrected a stale "Twenty-six tools" count to "Twenty-five tools", and
+  added `v0.3.0` live-validation evidence (age-aware scoring incl. the
+  `AGENTIC_MISP_MCP_AGE_WEIGHTING=false` no-regression fallback, new read tools, feed
+  observability) alongside the existing `v0.2.1` evidence.
+- `SECURITY.md`: supported-versions table and project-status line now include `0.3.x`.
+- `README.md`: added a Docker production note that `VOLUME`-declared `/app/logs` and
+  `/app/approvals` become anonymous volumes under `docker run --rm` unless explicitly bind-mounted,
+  and a Docker-based MCP client config example.
+
+### Tests
+
+- Added tests covering rejection of `2026-13-45`, `2026-02-30`, `2026-00-10`, and `2026-01-00`,
+  and confirming `2026-07-05` still passes through unchanged. 358 tests passing (up from 353).
+
 ## v0.3.1 (2026-07-05) — documentation and operator-readability patch
 
 Documentation-only release. No MCP tool changes (count stays 25), no scoring behavior changes,

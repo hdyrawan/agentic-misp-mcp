@@ -5,9 +5,11 @@ against MISP `2.5.42` in a non-production lab, including Docker runtime, stdio t
 Inspector, read-only workflows, all four controlled-write tools, `propose_event`/
 `propose_attribute` validation, TLS fail-closed behavior, timeout and response-size limits,
 warninglist behavior, runtime-only secrets, audit logging, production approval mode, and the HTTP
-bind guardrail. Production readiness is bounded to that documented MCP server scope; this project
-is still not a raw MISP API proxy, SIEM/SOAR platform, enterprise monitoring system, or generic
-MISP administration interface.
+bind guardrail. `v0.3.0` has additionally passed live validation in the same lab covering
+age-aware scoring (including `AGENTIC_MISP_MCP_AGE_WEIGHTING=false` exact-match fallback to prior
+scoring behavior), the added read tools, and feed observability. Production readiness is bounded
+to that documented MCP server scope; this project is still not a raw MISP API proxy, SIEM/SOAR
+platform, enterprise monitoring system, or generic MISP administration interface.
 
 ## Read-only by default; controlled write behind policy and approval
 
@@ -86,7 +88,7 @@ bounded, safe metadata.
 
 ## MCP tool boundary
 
-Twenty-six tools are exposed. The read-only tools:
+Twenty-five tools are exposed. The read-only tools:
 
 - `search_ioc`
 - `investigate_ioc`

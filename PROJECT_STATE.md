@@ -3,8 +3,17 @@
 Project: agentic-misp-mcp
 
 Current status:
-- **`v0.3.1` is the current release** (2026-07-05): a documentation/operator-readability patch
-  on `v0.3.0` — README rewritten for onboarding and production guidance, `llms.txt` refreshed,
+- **`v0.3.2` is the current release** (2026-07-05): a minimal date-validation hardening patch
+  based on external review of `v0.3.1` (commit `681fe17`). Fixed `search_events` accepting
+  calendar-invalid dates (e.g. `2026-13-45`, `2026-02-30`) that passed shape-only regex
+  validation; `_validate_date` now also parses with `datetime.strptime`. Also corrected a stale
+  "Twenty-six tools" doc count to "Twenty-five", extended `SECURITY.md`/`docs/security.md` to
+  cover `0.3.x`/`v0.3.0` live-validation evidence, and added a Docker anonymous-volume
+  production note plus a Docker MCP client example to the README. No MCP tool/scoring/
+  write-surface/approval-workflow/response-shape changes. 358 tests passing (up from 353). See
+  `CHANGELOG.md`.
+- **`v0.3.1`** (2026-07-05): a documentation/operator-readability patch on `v0.3.0` — README
+  rewritten for onboarding and production guidance, `llms.txt` refreshed,
   no MCP tool/scoring/write-surface/response-shape changes. See `CHANGELOG.md`.
 - **`v0.3.0`** (2026-07-05, merge `9687b7f`) added age-aware scoring (freshness labels +
   weighted scoring, default on; `AGENTIC_MISP_MCP_AGE_WEIGHTING=false` reproduces v0.2.x
@@ -162,7 +171,7 @@ Current status:
   its release notes were amended instead). `v0.2.0` GA release prep (version bump, RC→GA doc
   wording) followed as this same pass's final step.
 
-Current tests: 353 passed on `main` (257 at `v0.2.0` GA).
+Current tests: 358 passed on `main` (353 at `v0.3.1`, 257 at `v0.2.0` GA).
 Current MCP tool count: 25 (`config doctor`, `approvals prune`, and the proposal/validation
 layers are not MCP tools).
 Current license: MIT.

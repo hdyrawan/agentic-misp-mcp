@@ -174,6 +174,12 @@ docker run --rm -i --env-file /path/to/runtime/.env \
 Prefer Compose? See `docker-compose.example.yml` and
 [`docs/configuration.md`](docs/configuration.md#docker-compose).
 
+**Production note:** the Dockerfile declares `/app/logs` and `/app/approvals` as `VOLUME`s. If you
+run the image with `docker run --rm` and omit the `-v` bind mounts shown above, Docker silently
+creates anonymous volumes for both paths instead — audit logs and the approval database then
+disappear when the container is removed. Always bind-mount both paths explicitly in any
+production-write deployment.
+
 ## Configuration
 
 All configuration is via environment variables (or an `.env` file). Placeholders below are
@@ -299,6 +305,30 @@ Add to `claude_desktop_config.json`:
 
 Prefer `--env-file`/OS-level secrets over inlining the key when your client supports it, and
 never commit a client config containing a real key.
+
+### Docker (any MCP client)
+
+If the client spawns a subprocess (as Claude Desktop, OpenCode, and Hermes do above), point it at
+`docker run` instead of `uv`. Bind-mount `/app/logs` and `/app/approvals` explicitly — see the
+production note in [Docker](#docker) — and never bake `MISP_URL`/`MISP_API_KEY` into the image:
+
+```json
+{
+  "mcpServers": {
+    "agentic-misp-mcp": {
+      "command": "docker",
+      "args": [
+        "run", "--rm", "-i",
+        "--env-file", "/path/to/runtime/.env",
+        "-v", "/path/to/runtime/logs:/app/logs",
+        "-v", "/path/to/runtime/approvals:/app/approvals",
+        "agentic-misp-mcp:local",
+        "--transport", "stdio"
+      ]
+    }
+  }
+}
+```
 
 ### Hermes Agent
 
@@ -439,15 +469,16 @@ correlation with current telemetry before blocking or escalation.
 
 ## Release status
 
-- **Latest release:** `v0.3.1` — documentation/operator-readability patch on `v0.3.0`
-  (no MCP tool, scoring, or write-surface changes). See [`CHANGELOG.md`](CHANGELOG.md).
+- **Latest release:** `v0.3.2` — date-validation hardening patch on `v0.3.1` (`search_events`
+  now rejects calendar-invalid dates like `2026-02-30`; no MCP tool, scoring, write-surface, or
+  approval-workflow changes). See [`CHANGELOG.md`](CHANGELOG.md).
 - **Functional baseline:** `v0.3.0` — age-aware scoring, six new read-only tools (sightings,
   event search, status, feed observability), read-tool response envelope.
 - **Supported MISP baseline:** `2.5.42`, live-validated 14/14 —
   [`docs/live-validation-report-v0.3.0.md`](docs/live-validation-report-v0.3.0.md).
 - **Latest pre-merge review findings:**
   [`docs/review-v0.3.0-findings.md`](docs/review-v0.3.0-findings.md).
-- **Tool count:** 25. **Tests:** 353 (mocked MISP responses; live validation is a separate
+- **Tool count:** 25. **Tests:** 358 (mocked MISP responses; live validation is a separate
   manual pass).
 - **Scope of the production claim:** `v0.2.0` was declared GA **for the MCP-server scope of
   this project only** (server behavior, MISP API behavior, approval workflow, audit/redaction,

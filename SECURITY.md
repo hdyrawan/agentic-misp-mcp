@@ -2,15 +2,16 @@
 
 ## Project status
 
-`agentic-misp-mcp` is an MIT-licensed project with `0.2.x` releases validated for the documented MCP server scope: workflow-first read tools plus policy- and approval-gated controlled writes. `v0.2.1` passed live validation against MISP `2.5.42` using Docker, stdio transport, MCP Inspector, runtime-only secrets, audit logging, production approval mode, and the documented HTTP bind guardrail. Treat production readiness as bounded to that scope; it is not a raw MISP API proxy, SIEM/SOAR platform, or generic MISP administration surface.
+`agentic-misp-mcp` is an MIT-licensed project with `0.2.x` and `0.3.x` releases validated for the documented MCP server scope: workflow-first read tools plus policy- and approval-gated controlled writes. `v0.2.1` passed live validation against MISP `2.5.42` using Docker, stdio transport, MCP Inspector, runtime-only secrets, audit logging, production approval mode, and the documented HTTP bind guardrail. `v0.3.0` additionally passed live validation covering age-aware IOC scoring (including the `AGENTIC_MISP_MCP_AGE_WEIGHTING=false` no-regression fallback) and the added read tools and feed observability. Treat production readiness as bounded to that scope; it is not a raw MISP API proxy, SIEM/SOAR platform, or generic MISP administration surface.
 
 ## Supported versions
 
 | Version | Status |
 | --- | --- |
+| `0.3.x` | Supported for security fixes within the documented production-ready MCP scope. |
 | `0.2.x` | Supported for security fixes within the documented production-ready MCP scope. |
-| `main` / unreleased changes | Best-effort support until released; security fixes may land here before the next `0.2.x` release. |
-| `0.1.x` | Not supported. Upgrade to `0.2.x`. |
+| `main` / unreleased changes | Best-effort support until released; security fixes may land here before the next `0.3.x` release. |
+| `0.1.x` | Not supported. Upgrade to `0.3.x`. |
 | Older commits and branches | Not supported. |
 
 ## Reporting vulnerabilities

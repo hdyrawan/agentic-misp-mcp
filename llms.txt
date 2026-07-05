@@ -9,10 +9,12 @@ generation, dry-run proposal generation, and tightly controlled approval-gated w
 
 It must not become a raw MISP API proxy.
 
-## Project status (v0.3.1)
+## Project status (v0.3.2)
 
-- Current release: `v0.3.1`, a documentation/operator-readability patch on `v0.3.0`. No MCP
-  tool, scoring, write-surface, or response-shape changes relative to `v0.3.0`.
+- Current release: `v0.3.2`, a minimal date-validation hardening patch on `v0.3.1` based on
+  external review of commit `681fe17`. `search_events` now rejects calendar-invalid dates (e.g.
+  `2026-13-45`, `2026-02-30`) that previously passed shape-only regex validation. No MCP tool,
+  scoring, write-surface, or approval-workflow changes relative to `v0.3.1`.
 - Functional baseline: `v0.3.0` (2026-07-05) — age-aware scoring (freshness labels + weighted
   scores, default on), six new read-only tools (`get_ioc_sightings`, `search_events`,
   `get_misp_status`, `list_feeds`, `get_feed_status`, `summarize_feed_health`), and a read-tool
@@ -20,7 +22,7 @@ It must not become a raw MISP API proxy.
 - Current MCP tool count: **25**. Do not document a higher count: a no-op feed-proposal tool
   found during the v0.3.0 review was removed before merge (`docs/review-v0.3.0-findings.md`,
   finding F2) and must not be reintroduced.
-- Automated tests: 353 passing (mocked MISP responses).
+- Automated tests: 358 passing (mocked MISP responses).
 - Live validation: MISP `2.5.42` lab, `v0.3.0` pass 14/14 checks —
   `docs/live-validation-report-v0.3.0.md`. Pre-merge review findings:
   `docs/review-v0.3.0-findings.md`. Earlier evidence (v0.2.x): the GA pass in

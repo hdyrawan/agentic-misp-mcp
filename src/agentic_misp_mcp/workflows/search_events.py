@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+from datetime import datetime
 
 from agentic_misp_mcp.misp.client import MISPClient
 from agentic_misp_mcp.settings import Settings
@@ -20,6 +21,10 @@ def _validate_date(value: str | None, field_name: str) -> str | None:
         return None
     if not _DATE_PATTERN.match(cleaned):
         raise ValueError(f"{field_name} must be a YYYY-MM-DD date")
+    try:
+        datetime.strptime(cleaned, "%Y-%m-%d")
+    except ValueError as exc:
+        raise ValueError(f"{field_name} must be a valid YYYY-MM-DD date") from exc
     return cleaned
 
 
