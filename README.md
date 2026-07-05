@@ -526,9 +526,7 @@ passthrough, no unaudited tool path, and no write behavior without policy and ap
 Start with `PROJECT_STATE.md`, [`docs/security.md`](docs/security.md), and
 `src/agentic_misp_mcp/tools/registry.py`.
 
-Commits should be attributed to their human author only — do not add AI co-author trailers
-(for example `Co-Authored-By: <AI assistant>`) to commits in this repository, regardless of
-what tooling was used to help write them.
+
 
 ## License
 
