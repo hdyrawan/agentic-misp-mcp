@@ -7,7 +7,11 @@ import pytest
 
 from agentic_misp_mcp.audit import AuditLogger
 from agentic_misp_mcp.misp.warninglists import WarninglistCheckResult
-from agentic_misp_mcp.models.misp import MISPAttributeSummary, MISPEventSummary
+from agentic_misp_mcp.models.misp import (
+    MISPAttributeSummary,
+    MISPEventSummary,
+    MISPSightingReadSummary,
+)
 from agentic_misp_mcp.tools.registry import ALLOWED_TOOL_NAMES, register_tools
 from agentic_misp_mcp.workflows.controlled_write import REQUIRED_ROLE_BY_TOOL
 
@@ -42,14 +46,36 @@ class FakeClient:
     async def search_events_by_tag(self, tag, limit):
         return [MISPEventSummary(id=1, info="event", attribute_count=1, tags=[tag])]
 
+    async def search_sightings(self, value, limit):
+        return [MISPSightingReadSummary(event_id=1, attribute_id="2", type="0", source="test")]
+
+    async def search_events(
+        self, *, date_from=None, date_to=None, published=None, org=None, limit=20
+    ):
+        return [MISPEventSummary(id=1, info="event", attribute_count=1)]
+
+    async def get_version(self):
+        return "2.5.42"
+
+    async def probe_warninglists_available(self):
+        return True
+
+    async def list_feeds(self, limit, enabled=None):
+        return [
+            {"Feed": {"id": "1", "name": "feed", "enabled": True, "last_fetched": "1783209600"}}
+        ]
+
+    async def get_feed(self, feed_id):
+        return {"Feed": {"id": str(feed_id), "name": "feed", "enabled": True}}
+
 
 @pytest.mark.asyncio
-async def test_exactly_nineteen_tools_registered_and_audited(settings, tmp_path):
+async def test_exactly_twenty_six_tools_registered_and_audited(settings, tmp_path):
     mcp = FakeMCP()
     audit = AuditLogger(tmp_path / "audit.jsonl")
     register_tools(mcp, client=FakeClient(), settings=settings, audit_logger=audit)
 
-    assert len(ALLOWED_TOOL_NAMES) == 19
+    assert len(ALLOWED_TOOL_NAMES) == 26
     assert set(mcp.tools) == ALLOWED_TOOL_NAMES
 
     result = await mcp.tools["search_ioc"]("1.2.3.4", 20)
@@ -125,7 +151,7 @@ async def test_no_shell_filesystem_or_secret_passthrough_tools(settings, tmp_pat
         "token",
     )
 
-    assert len(mcp.tools) == 19
+    assert len(mcp.tools) == 26
     for name, func in mcp.tools.items():
         lowered_name = name.lower()
         assert not any(term in lowered_name for term in forbidden_tool_terms), name
@@ -191,6 +217,31 @@ async def test_all_phase_4_report_tools_are_registered_and_audited(settings, tmp
 
 
 @pytest.mark.asyncio
+async def test_m3_feed_observability_tools_are_registered_and_audited(settings, tmp_path):
+    mcp = FakeMCP()
+    audit = AuditLogger(tmp_path / "audit.jsonl")
+    register_tools(mcp, client=FakeClient(), settings=settings, audit_logger=audit)
+
+    calls = {
+        "list_feeds": lambda: mcp.tools["list_feeds"](50, True),
+        "get_feed_status": lambda: mcp.tools["get_feed_status"](1),
+        "summarize_feed_health": lambda: mcp.tools["summarize_feed_health"](100),
+        "propose_feed_changes": lambda: mcp.tools["propose_feed_changes"]("hygiene"),
+    }
+    results = {}
+    for name, call in calls.items():
+        results[name] = await call()
+
+    assert results["propose_feed_changes"]["status"] == "proposal_only"
+    lines = (tmp_path / "audit.jsonl").read_text().strip().splitlines()
+    records = [json.loads(line) for line in lines]
+    assert {record["tool"] for record in records} == set(calls)
+    assert all(record["policy"]["action"] == "read" for record in records)
+    assert all(record["policy"]["role"] == "read_only" for record in records)
+    assert all(record["success"] is True for record in records)
+
+
+@pytest.mark.asyncio
 async def test_existing_v01_and_phase_2_tools_still_registered(settings, tmp_path):
     mcp = FakeMCP()
     audit = AuditLogger(tmp_path / "audit.jsonl")
@@ -241,7 +292,27 @@ async def test_no_config_doctor_or_approvals_prune_mcp_tools_exist(settings, tmp
         assert "doctor" not in lowered
         assert "prune" not in lowered
         assert "vacuum" not in lowered
-    assert len(mcp.tools) == 19
+    assert len(mcp.tools) == 26
+
+
+@pytest.mark.asyncio
+async def test_no_feed_admin_or_raw_feed_proxy_tools_exist(settings, tmp_path):
+    mcp = FakeMCP()
+    audit = AuditLogger(tmp_path / "audit.jsonl")
+    register_tools(mcp, client=FakeClient(), settings=settings, audit_logger=audit)
+
+    forbidden = {
+        "enable_feed",
+        "disable_feed",
+        "fetch_feed",
+        "cache_feed",
+        "edit_feed",
+        "delete_feed",
+        "raw_feed",
+        "feed_proxy",
+    }
+    for name in mcp.tools:
+        assert name not in forbidden
 
 
 @pytest.mark.asyncio

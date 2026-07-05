@@ -122,6 +122,32 @@ def test_freshness_defaults(monkeypatch):
     assert settings.freshness_stale_days == 365
     assert settings.age_weighting is True
     assert settings.age_weights == (1.0, 0.75, 0.4, 0.15)
+    assert settings.feed_fresh_days == 7
+    assert settings.feed_stale_days == 30
+
+
+def test_feed_health_thresholds_configurable(monkeypatch):
+    _freshness_env(
+        monkeypatch,
+        AGENTIC_MISP_MCP_FEED_FRESH_DAYS="3",
+        AGENTIC_MISP_MCP_FEED_STALE_DAYS="10",
+    )
+
+    settings = Settings()
+
+    assert settings.feed_fresh_days == 3
+    assert settings.feed_stale_days == 10
+
+
+def test_feed_health_threshold_misordering_fails(monkeypatch):
+    _freshness_env(
+        monkeypatch,
+        AGENTIC_MISP_MCP_FEED_FRESH_DAYS="30",
+        AGENTIC_MISP_MCP_FEED_STALE_DAYS="30",
+    )
+
+    with pytest.raises(ValidationError, match="feed thresholds"):
+        Settings()
 
 
 def test_freshness_thresholds_configurable(monkeypatch):
