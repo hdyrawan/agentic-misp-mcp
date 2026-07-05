@@ -84,6 +84,12 @@ class Settings(BaseSettings):
     age_weights: Annotated[tuple[float, float, float, float], NoDecode] = Field(
         default=(1.0, 0.75, 0.4, 0.15), validation_alias="AGENTIC_MISP_MCP_AGE_WEIGHTS"
     )
+    feed_fresh_days: int = Field(
+        default=7, validation_alias="AGENTIC_MISP_MCP_FEED_FRESH_DAYS", ge=1
+    )
+    feed_stale_days: int = Field(
+        default=30, validation_alias="AGENTIC_MISP_MCP_FEED_STALE_DAYS", ge=1
+    )
 
     @field_validator("misp_api_key")
     @classmethod
@@ -158,6 +164,11 @@ class Settings(BaseSettings):
             raise ValueError(
                 "freshness thresholds must be ordered: AGENTIC_MISP_MCP_FRESHNESS_FRESH_DAYS < "
                 "AGENTIC_MISP_MCP_FRESHNESS_AGING_DAYS < AGENTIC_MISP_MCP_FRESHNESS_STALE_DAYS"
+            )
+        if not (self.feed_fresh_days < self.feed_stale_days):
+            raise ValueError(
+                "feed thresholds must be ordered: AGENTIC_MISP_MCP_FEED_FRESH_DAYS < "
+                "AGENTIC_MISP_MCP_FEED_STALE_DAYS"
             )
         return self
 

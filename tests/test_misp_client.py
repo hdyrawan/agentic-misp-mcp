@@ -398,3 +398,34 @@ async def test_get_version_and_warninglist_probe(settings):
     assert version == "2.5.42"
     assert available is True
     assert paths == ["/servers/getVersion", "/warninglists/checkValue"]
+
+
+@pytest.mark.asyncio
+async def test_list_feeds_filters_enabled_and_get_feed(settings):
+    paths = []
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        paths.append(request.url.path)
+        if request.url.path == "/feeds/index":
+            return httpx.Response(
+                200,
+                json={
+                    "response": [
+                        {"Feed": {"id": "1", "name": "enabled", "enabled": "1"}},
+                        {"Feed": {"id": "2", "name": "disabled", "enabled": "0"}},
+                    ]
+                },
+            )
+        return httpx.Response(200, json={"Feed": {"id": "1", "name": "enabled"}})
+
+    client = MISPClient(settings, transport=httpx.MockTransport(handler))
+    try:
+        feeds = await client.list_feeds(50, enabled=True)
+        feed = await client.get_feed(1)
+    finally:
+        await client.aclose()
+
+    assert paths == ["/feeds/index", "/feeds/view/1"]
+    assert len(feeds) == 1
+    assert feeds[0]["Feed"]["id"] == "1"
+    assert feed == {"Feed": {"id": "1", "name": "enabled"}}

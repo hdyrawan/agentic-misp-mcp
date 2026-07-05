@@ -230,6 +230,19 @@ class MISPClient:
         result = await self.check_warninglists("agentic-misp-mcp-warninglist-probe.invalid")
         return result.status != "not_available"
 
+    async def list_feeds(self, limit: int, enabled: bool | None = None) -> list[dict[str, Any]]:
+        raw = await self._request("GET", "/feeds/index")
+        records = self._extract_feed_records(raw)
+        if enabled is not None:
+            records = [record for record in records if self._feed_enabled(record) is enabled]
+        return records[:limit]
+
+    async def get_feed(self, feed_id: int | str) -> dict[str, Any]:
+        raw = await self._request("GET", f"/feeds/view/{feed_id}")
+        if isinstance(raw, dict):
+            return raw
+        raise MISPClientError("MISP feed response was not an object")
+
     def _parse_event_list(self, raw: Any, limit: int) -> list[MISPEventSummary]:
         records: list[Any]
         if isinstance(raw, dict):
@@ -254,6 +267,39 @@ class MISPClient:
             except ValueError:
                 continue
         return events
+
+    def _extract_feed_records(self, raw: Any) -> list[dict[str, Any]]:
+        if isinstance(raw, list):
+            records = raw
+        elif isinstance(raw, dict):
+            response = raw.get("response", raw)
+            if isinstance(response, list):
+                records = response
+            elif isinstance(response, dict):
+                nested = response.get("Feed") or response.get("feeds") or response.get("data") or []
+                records = nested if isinstance(nested, list) else [response]
+            else:
+                records = []
+        else:
+            records = []
+        return [record for record in records if isinstance(record, dict)]
+
+    def _feed_enabled(self, raw: dict[str, Any]) -> bool | None:
+        feed = raw.get("Feed", raw)
+        if not isinstance(feed, dict):
+            return None
+        value = feed.get("enabled")
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, int):
+            return bool(value)
+        if isinstance(value, str):
+            lowered = value.strip().lower()
+            if lowered in {"1", "true", "yes"}:
+                return True
+            if lowered in {"0", "false", "no"}:
+                return False
+        return None
 
     # Controlled write methods (Phase 8). Each maps to exactly one narrow MISP write
     # endpoint and is only ever invoked after policy allow + approval checks upstream.

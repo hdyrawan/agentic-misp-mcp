@@ -29,6 +29,8 @@ TLS, and secret-handling requirements before deploying against a real MISP insta
 | `AGENTIC_MISP_MCP_APPROVAL_TOKEN` | No | unset | Optional approval-token enforcement. When set and approval is required, `approved=true` calls must also include the matching `approval_token`. The token is redacted from audit logs and config-check output. |
 | `AGENTIC_MISP_MCP_MAX_RESPONSE_BYTES` | No | `5242880` | Maximum MISP HTTP response body size. Checked before JSON parsing using both `Content-Length` and actual bytes read. |
 | `AGENTIC_MISP_MCP_ALLOW_INSECURE_HTTP_BIND` | No | `false` | Permit experimental HTTP transport to bind a non-loopback host (e.g. `0.0.0.0` or `::`). Leave false unless the server is behind an authenticated TLS-terminating gateway. |
+| `AGENTIC_MISP_MCP_FEED_FRESH_DAYS` | No | `7` | Feed health threshold: fetch/cache ages at or below this are considered fresh. Must be at least `1` and less than `AGENTIC_MISP_MCP_FEED_STALE_DAYS`. |
+| `AGENTIC_MISP_MCP_FEED_STALE_DAYS` | No | `30` | Feed health threshold: fetch/cache ages above this are stale/cache-stale. Must be greater than `AGENTIC_MISP_MCP_FEED_FRESH_DAYS`. |
 
 ## Example `.env`
 
@@ -49,12 +51,14 @@ AGENTIC_MISP_MCP_REQUIRE_APPROVAL=true
 AGENTIC_MISP_MCP_APPROVAL_TOKEN=
 AGENTIC_MISP_MCP_MAX_RESPONSE_BYTES=5242880
 AGENTIC_MISP_MCP_ALLOW_INSECURE_HTTP_BIND=false
+AGENTIC_MISP_MCP_FEED_FRESH_DAYS=7
+AGENTIC_MISP_MCP_FEED_STALE_DAYS=30
 ```
 
 ## Policy and controlled write behavior
 
-The original 13 MCP tools are classified as `read` and are always allowed under the default
-`read_only` role. Six additional Phase 8 write tools (`propose_event`, `propose_attribute`,
+The read-only MCP tools are classified as `read` and are allowed under the default
+`read_only` role when they return bounded safe metadata. Six Phase 8 write tools (`propose_event`, `propose_attribute`,
 `submit_ioc_with_approval`, `add_sighting_with_approval`, `tag_event_with_approval`,
 `publish_event_with_approval`) are blocked unless `AGENTIC_MISP_MCP_ENABLE_WRITE=true` and the
 configured role permits the action. When approval is required (the default), the four
