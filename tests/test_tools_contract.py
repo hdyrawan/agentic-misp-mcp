@@ -7,7 +7,11 @@ import pytest
 
 from agentic_misp_mcp.audit import AuditLogger
 from agentic_misp_mcp.misp.warninglists import WarninglistCheckResult
-from agentic_misp_mcp.models.misp import MISPAttributeSummary, MISPEventSummary
+from agentic_misp_mcp.models.misp import (
+    MISPAttributeSummary,
+    MISPEventSummary,
+    MISPSightingReadSummary,
+)
 from agentic_misp_mcp.tools.registry import ALLOWED_TOOL_NAMES, register_tools
 from agentic_misp_mcp.workflows.controlled_write import REQUIRED_ROLE_BY_TOOL
 
@@ -42,14 +46,28 @@ class FakeClient:
     async def search_events_by_tag(self, tag, limit):
         return [MISPEventSummary(id=1, info="event", attribute_count=1, tags=[tag])]
 
+    async def search_sightings(self, value, limit):
+        return [MISPSightingReadSummary(event_id=1, attribute_id="2", type="0", source="test")]
+
+    async def search_events(
+        self, *, date_from=None, date_to=None, published=None, org=None, limit=20
+    ):
+        return [MISPEventSummary(id=1, info="event", attribute_count=1)]
+
+    async def get_version(self):
+        return "2.5.42"
+
+    async def probe_warninglists_available(self):
+        return True
+
 
 @pytest.mark.asyncio
-async def test_exactly_nineteen_tools_registered_and_audited(settings, tmp_path):
+async def test_exactly_twenty_two_tools_registered_and_audited(settings, tmp_path):
     mcp = FakeMCP()
     audit = AuditLogger(tmp_path / "audit.jsonl")
     register_tools(mcp, client=FakeClient(), settings=settings, audit_logger=audit)
 
-    assert len(ALLOWED_TOOL_NAMES) == 19
+    assert len(ALLOWED_TOOL_NAMES) == 22
     assert set(mcp.tools) == ALLOWED_TOOL_NAMES
 
     result = await mcp.tools["search_ioc"]("1.2.3.4", 20)
@@ -125,7 +143,7 @@ async def test_no_shell_filesystem_or_secret_passthrough_tools(settings, tmp_pat
         "token",
     )
 
-    assert len(mcp.tools) == 19
+    assert len(mcp.tools) == 22
     for name, func in mcp.tools.items():
         lowered_name = name.lower()
         assert not any(term in lowered_name for term in forbidden_tool_terms), name
@@ -241,4 +259,4 @@ async def test_no_config_doctor_or_approvals_prune_mcp_tools_exist(settings, tmp
         assert "doctor" not in lowered
         assert "prune" not in lowered
         assert "vacuum" not in lowered
-    assert len(mcp.tools) == 19
+    assert len(mcp.tools) == 22

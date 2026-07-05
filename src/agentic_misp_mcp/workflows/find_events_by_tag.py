@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from agentic_misp_mcp.misp.client import MISPClient
+from agentic_misp_mcp.models.misp import MISPEventSummary
 from agentic_misp_mcp.settings import Settings
 
 MAX_TAG_LENGTH = 256
@@ -25,17 +26,18 @@ async def find_events_by_tag_workflow(
     return {
         "tag": cleaned_tag,
         "event_count": len(events),
-        "events": [
-            {
-                "event_id": event.id,
-                "info": event.info,
-                "date": event.date,
-                "threat_level": event.threat_level_id,
-                "analysis": event.analysis,
-                "attribute_count": event.attribute_count,
-                "tags": event.tags,
-            }
-            for event in events
-        ],
+        "events": [_event_summary(event) for event in events],
         "limit": resolved_limit,
+    }
+
+
+def _event_summary(event: MISPEventSummary) -> dict[str, object]:
+    return {
+        "event_id": event.id,
+        "info": event.info,
+        "date": event.date,
+        "threat_level": event.threat_level_id,
+        "analysis": event.analysis,
+        "attribute_count": event.attribute_count,
+        "tags": event.tags,
     }

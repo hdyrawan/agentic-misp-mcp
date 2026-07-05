@@ -32,8 +32,11 @@ from agentic_misp_mcp.workflows.generate_markdown_event_report import (
 from agentic_misp_mcp.workflows.generate_markdown_ioc_report import (
     generate_markdown_ioc_report_workflow,
 )
+from agentic_misp_mcp.workflows.get_ioc_sightings import get_ioc_sightings_workflow
+from agentic_misp_mcp.workflows.get_misp_status import get_misp_status_workflow
 from agentic_misp_mcp.workflows.investigate_ioc import investigate_ioc_workflow
 from agentic_misp_mcp.workflows.pivot_ioc import pivot_ioc_workflow
+from agentic_misp_mcp.workflows.search_events import search_events_workflow
 from agentic_misp_mcp.workflows.search_ioc import search_ioc_workflow
 from agentic_misp_mcp.workflows.summarize_event import summarize_event_workflow
 
@@ -51,6 +54,9 @@ ALLOWED_TOOL_NAMES = {
     "generate_event_report",
     "generate_markdown_ioc_report",
     "generate_markdown_event_report",
+    "get_ioc_sightings",
+    "search_events",
+    "get_misp_status",
     "propose_event",
     "propose_attribute",
     "submit_ioc_with_approval",
@@ -202,6 +208,53 @@ def register_tools(
             "find_events_by_tag",
             {"tag": tag, "limit": limit},
             lambda: find_events_by_tag_workflow(client, settings, tag, limit),
+        )
+
+    async def get_ioc_sightings(value: str, limit: int = 50) -> dict[str, object]:
+        """Return bounded sighting summaries for an IOC."""
+        return await _audit_read_tool(
+            audit_logger,
+            "get_ioc_sightings",
+            {"value": value, "limit": limit},
+            lambda: get_ioc_sightings_workflow(client, settings, value, limit),
+        )
+
+    async def search_events(
+        date_from: str | None = None,
+        date_to: str | None = None,
+        published: bool | None = None,
+        org: str | None = None,
+        limit: int = 20,
+    ) -> dict[str, object]:
+        """Discover MISP events by bounded date, publication state, and org filters."""
+        return await _audit_read_tool(
+            audit_logger,
+            "search_events",
+            {
+                "date_from": date_from,
+                "date_to": date_to,
+                "published": published,
+                "org": org,
+                "limit": limit,
+            },
+            lambda: search_events_workflow(
+                client,
+                settings,
+                date_from=date_from,
+                date_to=date_to,
+                published=published,
+                org=org,
+                limit=limit,
+            ),
+        )
+
+    async def get_misp_status() -> dict[str, object]:
+        """Return MISP version and warninglist read capability status."""
+        return await _audit_read_tool(
+            audit_logger,
+            "get_misp_status",
+            {},
+            lambda: get_misp_status_workflow(client),
         )
 
     async def generate_event_report(event_id: int) -> dict[str, object]:
@@ -466,6 +519,9 @@ def register_tools(
     _register(mcp, "generate_event_report", generate_event_report)
     _register(mcp, "generate_markdown_ioc_report", generate_markdown_ioc_report)
     _register(mcp, "generate_markdown_event_report", generate_markdown_event_report)
+    _register(mcp, "get_ioc_sightings", get_ioc_sightings)
+    _register(mcp, "search_events", search_events)
+    _register(mcp, "get_misp_status", get_misp_status)
     _register(mcp, "propose_event", propose_event)
     _register(mcp, "propose_attribute", propose_attribute)
     _register(mcp, "submit_ioc_with_approval", submit_ioc_with_approval)

@@ -55,6 +55,14 @@ class MISPSightingSummary(BaseModel):
     message: str | None = None
 
 
+class MISPSightingReadSummary(BaseModel):
+    event_id: int | None = None
+    attribute_id: str | None = None
+    type: str | None = None
+    source: str | None = None
+    date_sighting: datetime | None = None
+
+
 class MISPTagResult(BaseModel):
     event_id: int
     tag: str
@@ -190,6 +198,19 @@ def parse_sighting(raw: dict[str, Any]) -> MISPSightingSummary:
         type=sighting.get("type"),
         saved=saved,
         message=None if saved else str(raw.get("message") or raw.get("name") or ""),
+    )
+
+
+def parse_sighting_read(raw: dict[str, Any]) -> MISPSightingReadSummary:
+    sighting = raw.get("Sighting", raw)
+    return MISPSightingReadSummary(
+        event_id=_coerce_event_id(sighting.get("event_id")),
+        attribute_id=(
+            str(sighting.get("attribute_id")) if sighting.get("attribute_id") is not None else None
+        ),
+        type=str(sighting.get("type")) if sighting.get("type") is not None else None,
+        source=str(sighting.get("source")) if sighting.get("source") is not None else None,
+        date_sighting=parse_misp_datetime(sighting.get("date_sighting")),
     )
 
 

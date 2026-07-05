@@ -24,6 +24,37 @@ def event_tag_search_payload(tag: str, limit: int) -> dict[str, object]:
     }
 
 
+def sighting_search_payload(value: str, limit: int) -> dict[str, object]:
+    return {
+        "returnFormat": "json",
+        "value": value,
+        "limit": limit,
+    }
+
+
+def event_search_payload(
+    *,
+    date_from: str | None = None,
+    date_to: str | None = None,
+    published: bool | None = None,
+    org: str | None = None,
+    limit: int,
+) -> dict[str, object]:
+    payload: dict[str, object] = {
+        "returnFormat": "json",
+        "limit": limit,
+    }
+    if date_from is not None:
+        payload["datefrom"] = date_from
+    if date_to is not None:
+        payload["dateto"] = date_to
+    if published is not None:
+        payload["published"] = published
+    if org is not None:
+        payload["org"] = org
+    return payload
+
+
 def event_create_payload(
     *,
     info: str,
