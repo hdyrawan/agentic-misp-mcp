@@ -1,411 +1,258 @@
 # agentic-misp-mcp
 
-**MISP workflows for agents — investigate, pivot, report, and propose controlled writes without turning your MCP server into a raw API proxy.**
+**MISP workflows for agents — investigate, pivot, report, and propose controlled writes without
+turning your MCP server into a raw API proxy.**
 
-`agentic-misp-mcp` is an early-stage MCP server for security analysts working with MISP threat intelligence. It gives AI agents a small set of analyst-oriented workflows: search an IOC, investigate context, pivot through related indicators, summarize events, generate reports, and prepare tightly controlled write proposals.
+`agentic-misp-mcp` is an MCP (Model Context Protocol) server that lets AI agents work with
+[MISP](https://www.misp-project.org/) threat intelligence safely. Instead of exposing the whole
+MISP API, it exposes **25 bounded, analyst-oriented workflows**: search an IOC, investigate its
+context, pivot through related indicators, summarize events, check warninglists, observe feed
+health, generate reports, and prepare tightly controlled write proposals.
 
-It exists because agents should not need unrestricted MISP API access to help with SOC work. Instead of exposing every endpoint, this project exposes opinionated workflows with bounded output, policy checks, and audit logging.
+The safety model is simple and enforced in code:
 
-## Status
+- **Read-first.** Every investigation tool is read-only; writes are disabled by default.
+- **Approval-gated writes.** The four write tools require write mode, a permitted role, and an
+  explicit approval step — in production mode, a one-time operator-approved request ID.
+- **Audit logging.** Every tool call (allowed, blocked, failed, or errored) is written to a
+  JSONL audit log with sanitized arguments.
+- **Redaction.** API keys, approval tokens, and feed secrets never appear in responses or logs.
+- **Role policy.** `read_only` / `analyst_write` / `curator` / `admin` roles bound what any
+  agent session can even attempt.
 
-**`v0.2.0` is GA production-ready for the MCP server scope defined in this project**
-(MCP server behavior, MISP API behavior, approval workflow, audit/redaction, config safety,
-runtime/deployment docs) — it is not a SIEM/SOAR/SOC platform, case-management system, or a
-broad enterprise-monitoring claim, and SIEM/SOAR/SOC integration remains optional future work,
-not a GA requirement (see
-[`docs/ga-production-readiness-plan.md`](docs/ga-production-readiness-plan.md)). Manual
-audit-log review is the accepted control for this release, not automated SOC-grade
-alerting/monitoring — see [`docs/production-readiness.md`](docs/production-readiness.md)'s
-"Audit logging and manual review guidance." **MISP `2.5.42` is the validated GA baseline**; if
-you run this against a different MISP version, run the validation checklist in
-[`docs/live-validation-plan.md`](docs/live-validation-plan.md) and
-[`docs/misp-compatibility.md`](docs/misp-compatibility.md) first — no other version is covered
-by this GA claim. HTTP `429`/rate-limit handling has controlled/mocked test coverage only; a
-live `429` was not reproduced (no safe way to trigger one in the lab — see
-[`docs/live-validation-report-v0.2.0-rc.1.md`](docs/live-validation-report-v0.2.0-rc.1.md)).
+**Compatibility baseline:** live-validated against **MISP `2.5.42`** (most recently the
+`v0.3.0` release, 14/14 live checks — see
+[`docs/live-validation-report-v0.3.0.md`](docs/live-validation-report-v0.3.0.md)). Other MISP
+versions are untested; see [`docs/misp-compatibility.md`](docs/misp-compatibility.md).
 
-- `main` contains `v0.2.0`, the first GA release. It builds on `v0.2.0-rc.1`
-  (`propose_event`/`propose_attribute` payload validation, a MISP version compatibility matrix,
-  a fixed dependency-update/Dependabot configuration) plus two fixes found during `v0.2.0-rc.1`'s
-  live validation pass: `add_sighting_with_approval` now correctly reports a MISP-rejected
-  sighting as `failed` instead of `executed`, and `check_warninglists` now correctly recognizes a
-  real positive warninglist hit against MISP `2.5.42` instead of reporting `not_available`. See
-  [`docs/misp-compatibility.md`](docs/misp-compatibility.md) and
-  [`docs/live-validation-report-v0.2.0-rc.1.md`](docs/live-validation-report-v0.2.0-rc.1.md).
-- Mocked test coverage exists for core workflows and policy paths (257 tests).
-- Live validation has passed against MISP `2.5.42` (Docker, stdio transport, MCP Inspector),
-  covering read-only workflows, all four controlled-write tools, `propose_event`/
-  `propose_attribute` validation, TLS fail-closed, timeout, large-result truncation, a positive
-  warninglist hit, warninglist miss/`not_available`, the full production approval lifecycle
-  (including one real MISP write and replay/hash-mismatch/wrong-tool/expired/rejected redemption
-  blocks), audit redaction/correlation, `config doctor` against safe and unsafe configs, and
-  `approvals prune`. See [`docs/live-validation-report-v0.2.0-rc.1.md`](docs/live-validation-report-v0.2.0-rc.1.md).
-- **Known limitations, explicitly not covered by GA:** only MISP `2.5.42` has been validated —
-  see [`docs/misp-compatibility.md`](docs/misp-compatibility.md) for untested-version risk; a
-  real HTTP `429` was verified via a mock transport only (no safe way to trigger one live in the
-  lab); container-image/dependency/secret scanning and signed release artifacts are not yet part
-  of CI/release — see [`docs/production-readiness.md`](docs/production-readiness.md) and
-  [`docs/ga-production-readiness-plan.md`](docs/ga-production-readiness-plan.md) for the full list
-  and the path beyond GA.
-- `agentic-misp-mcp config doctor` (operational-readiness checks) and `agentic-misp-mcp approvals prune` (operator-CLI-only approval-store maintenance) are both live-validated; see [`docs/configuration.md`](docs/configuration.md) and [`docs/rollback.md`](docs/rollback.md).
-- Current MCP tool count: **25**.
-- Primary transport: **stdio**.
-- HTTP transport exists but is experimental.
-- Requires Python 3.11+.
-- License: MIT.
+## Who is this for?
 
-## Quick start
+- **SOC analysts** — ask an agent to investigate an IOC and get verdict, confidence, freshness,
+  related events, and next steps instead of raw JSON dumps.
+- **Threat intelligence analysts** — pivot, correlate, and produce Markdown/JSON reports from
+  live MISP data.
+- **Detection engineers** — extract actionable (`to_ids`) indicators and event context with
+  bounded, predictable output.
+- **Security automation teams** — wire MISP into agent workflows without handing the agent an
+  unrestricted API key surface.
+- **Regulated / banking environments** — every call is audited, writes need out-of-band
+  operator approval, and the write surface is small and explicit.
 
-There are two ways to run `agentic-misp-mcp`: **local** (Python/`uv`, no Docker needed) or
-**Docker**. Pick one — both end up in the same place, an MCP server your client can talk to.
+## What can it do?
 
-### Prerequisites
+| Workflow | Tools involved |
+| --- | --- |
+| IOC investigation | `search_ioc`, `investigate_ioc`, `check_warninglists`, `pivot_ioc`, `find_related_iocs` |
+| Event search and context | `search_events`, `summarize_event`, `explain_event_context`, `extract_event_iocs`, `find_events_by_tag` |
+| Sightings | `get_ioc_sightings` (read), `add_sighting_with_approval` (gated write) |
+| Warninglist checks | `check_warninglists`, plus automatic checks inside `investigate_ioc` |
+| Feed observability (read-only) | `list_feeds`, `get_feed_status`, `summarize_feed_health` |
+| Markdown / JSON reporting | `generate_ioc_report`, `generate_event_report`, `generate_markdown_ioc_report`, `generate_markdown_event_report` |
+| Approval-gated writes | `submit_ioc_with_approval`, `add_sighting_with_approval`, `tag_event_with_approval`, `publish_event_with_approval` |
+| Age-aware scoring / stale-intel labeling | `investigate_ioc`, `generate_ioc_report`, `pivot_ioc` — see [Scoring behavior](#scoring-behavior) |
 
-- A MISP instance you can reach, and an API key for it (`MISP_URL`, `MISP_API_KEY`).
-- Python 3.11+ for the local path, **or** Docker for the Docker path.
-- An MCP client to actually use it (Claude Desktop, Claude Code, MCP Inspector, etc.).
+## The 25 tools
 
-### Option A — Local install (Python / `uv`)
+Access levels: **read-only** (never writes to MISP), **dry-run** (builds a reviewable payload,
+never calls a MISP write endpoint), **approval-gated write** (blocked unless write mode, role,
+and approval all allow it).
 
-1. **Install:**
+### Investigation and read tools
 
-   ```bash
-   pip install -e ".[dev]"
-   # or, with uv:
-   uv sync --extra dev
-   ```
-
-2. **Configure your MISP connection:**
-
-   ```bash
-   cp .env.example .env
-   # edit .env — at minimum set MISP_URL and MISP_API_KEY
-   ```
-
-3. **Validate configuration** (no MISP connection is made; the API key is redacted):
-
-   ```bash
-   agentic-misp-mcp config-check
-   # or: uv run agentic-misp-mcp config-check
-   ```
-
-4. **Run the server** over stdio (the primary supported transport):
-
-   ```bash
-   agentic-misp-mcp --transport stdio
-   # or: uv run agentic-misp-mcp --transport stdio
-   ```
-
-5. **Point your MCP client at it.** Example config (works from any working directory, since `uv
-   --directory` targets the repo explicitly):
-
-   ```json
-   {
-     "mcpServers": {
-       "agentic-misp-mcp": {
-         "command": "uv",
-         "args": [
-           "--directory", "/path/to/agentic-misp-mcp",
-           "run", "agentic-misp-mcp", "--transport", "stdio"
-         ],
-         "env": {
-           "MISP_URL": "https://misp.example.local",
-           "MISP_API_KEY": "your_misp_api_key_here"
-         }
-       }
-     }
-   }
-   ```
-
-   If you installed with `pip` into an environment already on your `PATH`, you can use
-   `"command": "agentic-misp-mcp"` with `"args": ["--transport", "stdio"]` instead of the `uv`
-   wrapper.
-
-### Option B — Docker
-
-1. **Build the image:**
-
-   ```bash
-   git clone https://github.com/hdyrawan/agentic-misp-mcp.git
-   cd agentic-misp-mcp
-   docker build -t agentic-misp-mcp:local .
-   ```
-
-2. **Create an env file outside the repository** (never commit real credentials) and a directory
-   for audit logs:
-
-   ```bash
-   mkdir -p ~/.config/agentic-misp-mcp
-   cp .env.example ~/.config/agentic-misp-mcp/.env
-   # edit ~/.config/agentic-misp-mcp/.env — at minimum set MISP_URL and MISP_API_KEY
-   mkdir -p ~/.local/state/agentic-misp-mcp/logs
-   ```
-
-   (Prefer Compose? `docker-compose.example.yml` does the same thing — see
-   [`docs/configuration.md`](docs/configuration.md#docker-compose).)
-
-3. **Validate configuration:**
-
-   ```bash
-   docker run --rm \
-     --env-file ~/.config/agentic-misp-mcp/.env \
-     -v ~/.local/state/agentic-misp-mcp/logs:/app/logs \
-     agentic-misp-mcp:local config-check
-   ```
-
-4. **Run the server** over stdio:
-
-   ```bash
-   docker run --rm -i \
-     --env-file ~/.config/agentic-misp-mcp/.env \
-     -v ~/.local/state/agentic-misp-mcp/logs:/app/logs \
-     agentic-misp-mcp:local --transport stdio
-   ```
-
-5. **Point your MCP client at it** (assumes your client can spawn `docker` on the same host — for
-   a remote/headless Docker host, run the client there too, or see the SSH-tunnel note below):
-
-   ```json
-   {
-     "mcpServers": {
-       "agentic-misp-mcp": {
-         "command": "docker",
-         "args": [
-           "run", "--rm", "-i",
-           "--env-file", "/home/you/.config/agentic-misp-mcp/.env",
-           "-v", "/home/you/.local/state/agentic-misp-mcp/logs:/app/logs",
-           "agentic-misp-mcp:local",
-           "--transport", "stdio"
-         ]
-       }
-     }
-   }
-   ```
-
-### Verify it's working
-
-Either path: `config-check` should print `Configuration check: OK` with `MISP_API_KEY is set
-([REDACTED])`. Then ask your MCP client to run a read-only tool — for example `search_ioc` with a
-known indicator — and confirm you get a structured JSON result back. See "Testing against a live
-MISP lab" below for a deeper validation walkthrough (MCP Inspector, SSH tunneling, a read-only
-test checklist).
-
-## MCP client integration (Docker)
-
-This is the Docker-based `docker run` invocation from "Option B — Docker" above, wired into two
-specific MCP clients. Both were built and tested against this exact command during `v0.2.0` GA
-validation — Docker image built locally (`docker build -t agentic-misp-mcp:local .`), container
-confirmed reachable to a real MISP lab over the LAN, and both clients confirmed `tools/list`
-returns all 25 tools and a live `check_warninglists` call returns real MISP data.
-
-In both examples below, replace `/path/to/agentic-misp-mcp/.env` and `/path/to/logs` with your
-own paths (see "Option B — Docker" above for creating them) — never commit a real `.env` file or
-paste real credentials into a client config.
-
-### Claude Code
-
-Use the `claude mcp add` CLI rather than hand-writing JSON — it registers the server, spawns it,
-and confirms the connection in one step:
-
-```bash
-claude mcp add agentic-misp-mcp -s local -- \
-  docker run --rm -i \
-  --env-file /path/to/agentic-misp-mcp/.env \
-  -v /path/to/logs:/app/logs \
-  agentic-misp-mcp:local --transport stdio
-```
-
-- `-s local` scopes the server to you, in this project only, and is **not** committed to git
-  (unlike `-s project`, which writes a shared `.mcp.json` — do not use `-s project` here unless
-  every teammate has their own `.env` at that exact path, since the path is stored verbatim).
-- Verify: `claude mcp list` should show `agentic-misp-mcp ... ✔ Connected`, and `claude mcp get
-  agentic-misp-mcp` shows the full command. **Start a new Claude Code session** afterward — a
-  server added mid-session is connected immediately, but its tools only appear in a session
-  started after the `add`.
-- To remove: `claude mcp remove agentic-misp-mcp -s local`.
-- Prefer the CLI above; if you need the equivalent manual `.mcp.json` shape instead, see "Point
-  your MCP client at it" in "Option B — Docker".
-
-### Hermes
-
-Hermes uses its own `hermes mcp add` command, which performs a live discovery handshake against
-the server (spawns it, lists its tools, and prompts to enable them) before saving:
-
-```bash
-hermes mcp add agentic-misp-mcp \
-  --command docker \
-  --args run --rm -i \
-    --env-file /path/to/agentic-misp-mcp/.env \
-    -v /path/to/logs:/app/logs \
-    agentic-misp-mcp:local --transport stdio
-```
-
-- Answer `y` at the "Enable all 25 tools?" prompt (or run non-interactively with `echo y | hermes
-  mcp add ...`) to enable the full tool set; use `select` instead of `y` to enable only a subset
-  (for example, a read-only Hermes profile might enable everything except the six
-  `_with_approval`/`propose_*` write tools).
-- Verify: `hermes mcp list` should show `agentic-misp-mcp ... ✓ enabled`, and `hermes mcp test
-  agentic-misp-mcp` re-runs the discovery handshake and lists all 25 tools. **Start a new Hermes
-  session** afterward for the tools to be available in chat.
-- To remove: `hermes mcp remove agentic-misp-mcp`.
-- This writes into `~/.hermes/config.yaml`'s `mcp_servers.agentic-misp-mcp` block; back that file
-  up first if you're editing it by hand instead of via the CLI.
-
-## Live lab validation status
-
-The first live validation was performed against a controlled, non-production MISP lab. For the
-most recent and most complete live validation pass (TLS fail-closed, timeout, large-result
-truncation, a positive warninglist hit, and the full production approval lifecycle including one
-real MISP write), see
-[`docs/live-validation-report-v0.2.0-rc.1.md`](docs/live-validation-report-v0.2.0-rc.1.md).
-
-| Area | Result | Notes |
+| Tool | Access | What it does |
 | --- | --- | --- |
-| MISP version check | Passed | `/servers/getVersion` returned HTTP 200 against MISP `2.5.42`. |
-| Docker runtime | Passed | Image built locally and run with runtime-only environment variables. |
-| `config-check` | Passed | Configuration validated, API key was redacted, and audit-log path was writable. |
-| MCP transport | Passed | MCP Inspector connected over stdio to `docker run --rm -i ... --transport stdio`. |
-| `tools/list` | Passed | MCP Inspector listed the exposed MCP tools. |
-| `search_ioc` | Passed | Tested with non-matching, IPv4, domain, composite `domain\|ip`, and SHA256 indicators. |
-| `investigate_ioc` | Passed | Returned verdict, confidence, related event context, warninglist status, and related IOCs. |
-| `summarize_event` | Passed | Summarized a real MISP event without returning unbounded raw event JSON. |
-| `generate_ioc_report` | Passed | Generated a deterministic IOC report from live MISP data. |
-| `check_warninglists` | Passed | Warninglist checks returned structured results when available. |
-| `find_events_by_tag` | Passed | Returned real events for a live tag (`OSINT`), including info, date, threat level, and tags. |
-| Audit logging | Passed | Successful calls, validation failures, runtime errors, and blocked write attempts were written to JSONL audit logs. Blocked policy decisions are recorded with `allowed=false`, `success=false`, and `outcome=blocked`. |
-| Read-only write blocking | Passed | A write attempt with `approved=true` was blocked in `read_only` mode while write mode was disabled; follow-up search confirmed MISP was not modified. |
-| Error path: unreachable `MISP_URL` | Passed | Returned a clean connection error (`isError: true`) with no crash; audit log recorded `outcome=error` and `error_type=MISPClientError`. |
-| Error path: invalid `MISP_API_KEY` | Passed | Returned a clean authentication error with no crash and no key echoed; audit log recorded `outcome=error` and `error_type=MISPAuthenticationError`. |
-| MCP Inspector CLI mode | Passed | `tools/list` and `tools/call` verified via `--cli` mode (non-browser) against `uv run agentic-misp-mcp` over stdio. |
-| `submit_ioc_with_approval` | Passed | `pending_approval` then `executed` against a dedicated sandbox event; created attribute confirmed visible via `search_ioc`. |
-| `add_sighting_with_approval` | Passed | Sighting recorded against the submitted attribute and confirmed visible in MISP. |
-| `tag_event_with_approval` | Passed | Real tag (`tlp:white`) confirmed attached to the event; an unrecognized tag correctly reports `status: "failed"` (see Fixed below). |
-| `publish_event_with_approval` | Passed | `analyst_write` correctly blocked (requires `curator`); `curator` published the sandbox event, confirmed via direct MISP query (`published: true`). |
-| Controlled-write policy blocking | Passed | `read_only`/write-disabled and `analyst_write`-on-publish were both correctly blocked with no MISP call made. |
-| Production deployment | Not validated | This project remains lab-tested, not production-certified. |
+| `search_ioc(value, limit)` | read-only | Find normalized MISP attribute matches for an indicator. |
+| `investigate_ioc(value, limit)` | read-only | Verdict, confidence, freshness, warninglists, related events, next steps. |
+| `pivot_ioc(value, limit)` | read-only | Pivot from one IOC into related context. |
+| `find_related_iocs(value, limit)` | read-only | Rank related indicators worth hunting. |
+| `summarize_event(event_id)` | read-only | Bounded event summary (never full raw event JSON). |
+| `explain_event_context(event_id)` | read-only | What an event appears to represent. |
+| `extract_event_iocs(event_id, limit)` | read-only | Extract supported IOC types from an event. |
+| `find_events_by_tag(tag, limit)` | read-only | Events associated with a tag. |
+| `search_events(date_from, date_to, published, org, limit)` | read-only | Discover events by bounded date/publication/org filters. |
+| `get_ioc_sightings(value, limit)` | read-only | Bounded sighting summaries for an IOC. |
+| `check_warninglists(value)` | read-only | Check an IOC against MISP warninglists. |
+| `get_misp_status()` | read-only | MISP version and warninglist capability status. |
 
-The first positive live IOC test used `54.87.87.13`, which matched MISP event `187`, `OSINT - NANHAISHU RATing the South China Sea`. The generated IOC report classified the IOC as `suspicious` with medium confidence based on live MISP matches, actionable `to_ids` attributes, related event context, and extracted related IOCs.
+### Feed observability
 
-Additional read-only validation confirmed that domain-side searches for composite `domain|ip` attributes work, including `mines.port0.org` and `eholidays.mooo.com`. SHA256 lookup was also validated using a related payload-delivery hash from the same event.
+| Tool | Access | What it does |
+| --- | --- | --- |
+| `list_feeds(limit, enabled)` | read-only | List configured feeds with bounded, **redacted** metadata. |
+| `get_feed_status(feed_id)` | read-only | One feed's redacted status and fetch/cache age. |
+| `summarize_feed_health(limit)` | read-only | Group feeds by health label (fresh/stale/never-fetched/disabled). |
 
-Because the first positive live test used historical OSINT data, analyst workflows should correlate hits with current local telemetry before blocking or escalation.
-
-## Safety model
-
-This project is workflow-first, not endpoint-first.
-
-- Read-only by default.
-- Controlled write tools exist but are disabled by default: `AGENTIC_MISP_MCP_ENABLE_WRITE=false`.
-- Approval is required by default when writes are enabled: `AGENTIC_MISP_MCP_REQUIRE_APPROVAL=true`.
-- `MISP_API_KEY` is loaded only from environment variables.
-- No API key, token, password, authorization header, or secret passthrough through MCP tool arguments.
-- No raw MISP API proxy.
-- No generic user/organisation/server/settings admin tools.
-- No shell execution or unrestricted filesystem tools.
-- Every MCP tool call is audited with sanitized arguments and policy decision fields.
-
-Important approval limitation: lab approval mode and production approval mode are different. In
-`AGENTIC_MISP_MCP_APPROVAL_MODE=lab` (the default), `approved=true` is only a programmatic lab gate;
-`AGENTIC_MISP_MCP_APPROVAL_TOKEN` is an optional shared-secret control for that lab flow and is not
-the production approval mechanism. In `AGENTIC_MISP_MCP_APPROVAL_MODE=production`, `approved=true`
-alone never executes a write. Production execution requires a persisted `approval_request_id` that
-was approved out of band with the operator CLI, is one-time-use, TTL-bound, and exact
-operation-hash-bound.
-
-## Current MCP tools
-
-### Read-only investigation
-
-- `search_ioc(value, limit=20)` — find normalized MISP attribute matches.
-- `investigate_ioc(value, limit=20)` — combine matches, warninglists, related events, scoring, and next steps.
-- `summarize_event(event_id)` — summarize a MISP event without returning full raw event JSON.
-- `check_warninglists(value)` — check an IOC against warninglists when available.
-- `get_ioc_sightings(value, limit=50)` — read bounded sighting summaries for an IOC.
-- `search_events(date_from=None, date_to=None, published=None, org=None, limit=20)` — discover
-  events by bounded date, publication-state, and org filters.
-- `get_misp_status()` — report MISP version and warninglist capability status.
-
-### Pivoting and event intelligence
-
-- `pivot_ioc(value, limit=20)` — pivot from one IOC into useful related context.
-- `find_related_iocs(value, limit=20)` — rank related indicators.
-- `extract_event_iocs(event_id, limit=100)` — extract supported IOC types from an event.
-- `explain_event_context(event_id)` — explain what an event appears to represent.
-- `find_events_by_tag(tag, limit=20)` — find events associated with a tag.
-
-### Feed observability (read-only)
-
-- `list_feeds(limit=50, enabled=None)` — list configured feeds with bounded, redacted metadata.
-- `get_feed_status(feed_id)` — inspect one feed's redacted status and fetch/cache age.
-- `summarize_feed_health(limit=100)` — group feeds by health label.
-
-Feed fetch/cache/enable/disable/edit/delete operations remain operator-only MISP admin actions and
-are not exposed as MCP tools. See [`docs/feed-observability.md`](docs/feed-observability.md).
+Feed enable/disable/fetch/cache/edit/delete remain operator-only MISP admin actions and are
+**not** exposed as MCP tools. See [`docs/feed-observability.md`](docs/feed-observability.md).
 
 ### Reporting
 
-- `generate_ioc_report(value)` — deterministic structured IOC report.
-- `generate_event_report(event_id)` — deterministic structured event report.
-- `generate_markdown_ioc_report(value)` — Markdown IOC report for analyst notes or escalation.
-- `generate_markdown_event_report(event_id)` — Markdown event report.
+| Tool | Access | What it does |
+| --- | --- | --- |
+| `generate_ioc_report(value)` | read-only | Deterministic structured (JSON) IOC report. |
+| `generate_event_report(event_id)` | read-only | Deterministic structured (JSON) event report. |
+| `generate_markdown_ioc_report(value)` | read-only | Markdown IOC report for notes/escalation. |
+| `generate_markdown_event_report(event_id)` | read-only | Markdown event report. |
 
-### Proposal-only tools that never write to MISP
+### Proposal (dry-run) tools
 
-These tools build reviewable payloads only. They are policy-gated, but they never invoke MISP write endpoints.
-
-- `propose_event(...)` — build an event creation proposal; never writes to MISP.
-- `propose_attribute(...)` — build an attribute creation proposal; never writes to MISP.
+| Tool | Access | What it does |
+| --- | --- | --- |
+| `propose_event(...)` | dry-run | Build and validate an event-creation proposal. Never writes to MISP. |
+| `propose_attribute(...)` | dry-run | Build and validate an attribute-creation proposal. Never writes to MISP. |
 
 ### Approval-gated write tools
 
-These tools are blocked unless write mode and role allow the action; write execution also requires explicit approval by default.
+| Tool | Access | What it does |
+| --- | --- | --- |
+| `submit_ioc_with_approval(...)` | approval-gated write | Add an attribute to an event. |
+| `add_sighting_with_approval(...)` | approval-gated write | Record a sighting. |
+| `tag_event_with_approval(...)` | approval-gated write | Tag an event. |
+| `publish_event_with_approval(...)` | approval-gated write | Publish an event (curator/admin roles only). |
 
-- `submit_ioc_with_approval(..., approved=False, approval_token=None, approval_request_id=None)` — add an attribute only when policy and approval allow.
-- `add_sighting_with_approval(..., approved=False, approval_token=None, approval_request_id=None)` — add a sighting only when policy and approval allow.
-- `tag_event_with_approval(event_id, tag, approved=False, approval_token=None, approval_request_id=None)` — tag an event only when policy and approval allow.
-- `publish_event_with_approval(event_id, approved=False, approval_token=None, approval_request_id=None)` — publish an event only for curator/admin roles and approval.
+Write-tool results are explicit: `blocked`, `invalid`, `pending_approval`, `executed`, or
+`failed` (MISP itself rejected the write). There are no silent writes. See
+[`docs/approval-flow.md`](docs/approval-flow.md).
 
-Write-tool results are explicit: `blocked`, `pending_approval`, or `executed`. There are no silent writes.
+## Quick start
 
-## Testing against a live MISP lab (optional)
-
-Beyond the Quick start above, this section covers the deeper flow used for this project's own
-live-lab validation (see the validation table below) — useful if you want to reproduce it, or run
-the same checks against your own non-production MISP lab. It assumes you already completed the
-Docker Quick start above (image built, env file and log directory created).
-
-### Test MISP connectivity from inside the container
+Prerequisites: Python 3.11+ and [`uv`](https://docs.astral.sh/uv/) (or Docker — see
+[Docker](#docker)), a reachable MISP instance, and a MISP API key.
 
 ```bash
-docker run --rm \
-  --env-file ~/.config/agentic-misp-mcp/.env \
-  --entrypoint python \
-  agentic-misp-mcp:local \
-  -c "import os, httpx; verify=os.environ.get('MISP_VERIFY_TLS','true').lower()=='true'; r=httpx.get(os.environ['MISP_URL'].rstrip('/') + '/servers/getVersion', headers={'Authorization': os.environ['MISP_API_KEY'], 'Accept':'application/json'}, verify=verify, timeout=10); print('STATUS:', r.status_code); print(r.text[:1000])"
+# 1. Clone and install
+git clone https://github.com/hdyrawan/agentic-misp-mcp.git
+cd agentic-misp-mcp
+uv sync --extra dev
+
+# 2. Configure (at minimum MISP_URL and MISP_API_KEY)
+cp .env.example .env
+# edit .env
+
+# 3. Validate configuration (no MISP connection is made; the API key is redacted)
+uv run agentic-misp-mcp config-check
+
+# 4. Run the test suite
+uv run --extra dev pytest -q
+
+# 5. Start the MCP server over stdio (the primary supported transport)
+uv run agentic-misp-mcp --transport stdio
 ```
 
-A `STATUS: 200` response confirms the container can reach the MISP API before running any MCP tools.
+Then:
 
-### Run with MCP Inspector
+6. **Connect an MCP client** — see [MCP client examples](#mcp-client-examples) below.
+7. **Run a first read-only tool** — `get_misp_status` is a good zero-risk smoke test; it
+   confirms connectivity and reports the MISP version.
+8. **Review the audit output**:
 
-Against Docker:
+   ```bash
+   tail -n 20 logs/audit.jsonl | jq .
+   ```
+
+A good first-five sequence for a new operator, all read-only: `get_misp_status` →
+`check_warninglists` → `investigate_ioc` → `search_events` → `summarize_feed_health`.
+
+### Docker
 
 ```bash
-npx @modelcontextprotocol/inspector@0.22.0 \
-  docker run --rm -i \
-    --env-file ~/.config/agentic-misp-mcp/.env \
-    -v ~/.local/state/agentic-misp-mcp/logs:/app/logs \
-    agentic-misp-mcp:local --transport stdio
+docker build -t agentic-misp-mcp:local .
+
+# keep the env file outside the repository; never commit real credentials
+mkdir -p /path/to/runtime/logs
+cp .env.example /path/to/runtime/.env   # edit it
+
+docker run --rm --env-file /path/to/runtime/.env \
+  -v /path/to/runtime/logs:/app/logs \
+  agentic-misp-mcp:local config-check
+
+docker run --rm -i --env-file /path/to/runtime/.env \
+  -v /path/to/runtime/logs:/app/logs \
+  agentic-misp-mcp:local --transport stdio
 ```
 
-Against a local (non-Docker) install:
+Prefer Compose? See `docker-compose.example.yml` and
+[`docs/configuration.md`](docs/configuration.md#docker-compose).
+
+## Configuration
+
+All configuration is via environment variables (or an `.env` file). Placeholders below are
+fake — never commit real credentials.
+
+### Required
+
+| Variable | Example | Notes |
+| --- | --- | --- |
+| `MISP_URL` | `https://misp.example.local` | Base URL of your MISP instance. |
+| `MISP_API_KEY` | `your_misp_api_key_here` | Runtime-only automation key. Loaded from the environment only; never passed as a tool argument. |
+
+### Connection and output bounds (optional)
+
+| Variable | Default | Notes |
+| --- | --- | --- |
+| `MISP_VERIFY_TLS` | `true` | **Keep `true` in production.** `false` is for isolated labs with self-signed certificates only — prefer adding your internal CA to the trust store instead. |
+| `MISP_TIMEOUT_SECONDS` | `30` | HTTP timeout, > 0 and <= 300. |
+| `MISP_DEFAULT_LIMIT` | `20` | Default result limit. |
+| `MISP_MAX_LIMIT` | `100` | Maximum accepted result limit. |
+| `MISP_EVENT_ATTRIBUTE_LIMIT` | `50` | Attribute cap for event summaries/investigations. |
+| `MISP_RELATED_EVENT_LIMIT` | `5` | Related-event expansion cap. |
+| `AGENTIC_MISP_MCP_MAX_RESPONSE_BYTES` | `5242880` | Max MISP HTTP response body size, enforced (fail-closed) before JSON parsing. |
+
+### Safety and policy (optional)
+
+| Variable | Default | Notes |
+| --- | --- | --- |
+| `AGENTIC_MISP_MCP_ROLE` | `read_only` | `read_only`, `analyst_write`, `curator`, or `admin` — see [`docs/roles.md`](docs/roles.md). |
+| `AGENTIC_MISP_MCP_ENABLE_WRITE` | `false` | Global write-mode gate. Leave `false` unless you need writes. |
+| `AGENTIC_MISP_MCP_REQUIRE_APPROVAL` | `true` | Lab-mode gate requiring explicit `approved=true`; production mode requires an `approval_request_id` regardless. |
+| `AGENTIC_MISP_MCP_APPROVAL_MODE` | `lab` | `lab` = programmatic `approved=true` flow; `production` = persisted, operator-approved, one-time-use request IDs. |
+| `AGENTIC_MISP_MCP_APPROVAL_TOKEN` | unset | Optional lab shared-secret hardening; redacted in audit logs. Not the production approval mechanism. |
+| `AGENTIC_MISP_MCP_APPROVAL_STORE_PATH` | `./approvals.sqlite3` | SQLite store for production approvals. The agent must not have write access to it. Persist it. |
+| `AGENTIC_MISP_MCP_APPROVAL_TTL_SECONDS` | `900` | Production approval lifetime. |
+| `AGENTIC_MISP_MCP_ALLOWED_ATTRIBUTE_TYPES` | unset | Production guardrail: allowlist of submittable attribute types. |
+| `AGENTIC_MISP_MCP_ALLOWED_ATTRIBUTE_CATEGORIES` | unset | Production guardrail: allowlist of attribute categories. |
+| `AGENTIC_MISP_MCP_ALLOWED_TAGS` | unset | Production guardrail: allowlist of event tags (`*` suffix = prefix match). |
+| `AGENTIC_MISP_MCP_ENABLE_PUBLISH` | `false` | Dedicated publish kill switch; publish also requires curator/admin role and approval. |
+| `AGENTIC_MISP_MCP_AUDIT_LOG_PATH` | `./logs/audit.jsonl` | JSONL audit log path. Persist it (mount a volume under Docker). |
+| `AGENTIC_MISP_MCP_LOG_LEVEL` | `INFO` | Application log level. |
+| `AGENTIC_MISP_MCP_ALLOW_INSECURE_HTTP_BIND` | `false` | Experimental HTTP transport refuses non-loopback binds unless this is set. Keep `false`. |
+
+### Age-aware scoring and feed freshness (optional, v0.3.0+)
+
+| Variable | Default | Notes |
+| --- | --- | --- |
+| `AGENTIC_MISP_MCP_AGE_WEIGHTING` | `true` | Age-aware IOC scoring. `false` reproduces v0.2.x scoring exactly (the `freshness` block is emitted either way). |
+| `AGENTIC_MISP_MCP_FRESHNESS_FRESH_DAYS` | `30` | Newest signal at or below this age is `fresh`. |
+| `AGENTIC_MISP_MCP_FRESHNESS_AGING_DAYS` | `90` | Upper bound for `aging`. |
+| `AGENTIC_MISP_MCP_FRESHNESS_STALE_DAYS` | `365` | Upper bound for `stale`; older is `expired`. |
+| `AGENTIC_MISP_MCP_AGE_WEIGHTS` | `1.0,0.75,0.4,0.15` | Score multipliers for fresh/aging/stale/expired, each 0–1. |
+| `AGENTIC_MISP_MCP_FEED_FRESH_DAYS` | `7` | Feed fetch/cache age at or below this is fresh. |
+| `AGENTIC_MISP_MCP_FEED_STALE_DAYS` | `30` | Feed fetch/cache age above this is stale. |
+
+Full reference and examples: [`docs/configuration.md`](docs/configuration.md). Before any
+production run, also use the deeper check:
 
 ```bash
-npx @modelcontextprotocol/inspector@0.22.0 \
+uv run agentic-misp-mcp config doctor
+```
+
+It validates write/approval-mode pairing, approval-store and audit-log permission safety,
+allowlist coverage, and more — without connecting to MISP or printing secrets.
+
+## MCP client examples
+
+All examples use the stdio transport (the primary supported transport) and generic paths —
+replace `/path/to/agentic-misp-mcp` with your checkout (e.g. `/home/user/agentic-misp-mcp` or
+`/opt/agentic-misp-mcp`).
+
+### MCP Inspector (smoke testing)
+
+```bash
+npx @modelcontextprotocol/inspector \
   uv --directory /path/to/agentic-misp-mcp run agentic-misp-mcp --transport stdio
 ```
 
-For headless/CI use (no browser UI), pass `--cli` and `--method`:
+Headless/CI mode (no browser):
 
 ```bash
 npx -y @modelcontextprotocol/inspector --cli \
@@ -413,223 +260,204 @@ npx -y @modelcontextprotocol/inspector --cli \
   --method tools/list
 ```
 
-### Headless host access with SSH tunnel
+On a headless host, either use `--cli` mode or forward the Inspector UI ports over SSH:
+`ssh -L 6274:localhost:6274 -L 6277:localhost:6277 user@mcp-host.example.local`.
 
-MCP Inspector's browser UI serves its client and proxy on ports 6274 and 6277. When Inspector runs
-on a headless Linux host, forward both ports over SSH and open the UI from your workstation
-browser:
-
-```bash
-ssh -L 6274:localhost:6274 -L 6277:localhost:6277 user@mcp-host.example.local
-```
-
-Then browse to `http://localhost:6274` on the workstation. (The `--cli` mode above avoids needing
-this entirely.)
-
-### Check audit logs
+### Claude Code
 
 ```bash
-tail -n 20 ~/.local/state/agentic-misp-mcp/logs/audit.jsonl | jq .
+claude mcp add agentic-misp-mcp -s local -- \
+  uv --directory /path/to/agentic-misp-mcp run agentic-misp-mcp --transport stdio
 ```
 
-Audit entries are JSONL, with sanitized arguments and policy decision fields. Successful calls,
-validation failures, runtime errors, blocked write attempts, and MISP-side write rejections
-(`outcome: "failed"`) are all recorded — see [`docs/security.md`](docs/security.md) for the full
-outcome semantics.
+Verify with `claude mcp list` (should show `✔ Connected`), then start a **new** Claude Code
+session — tools appear in sessions started after the `add`. Remove with
+`claude mcp remove agentic-misp-mcp -s local`. Avoid `-s project` unless every teammate has the
+same paths, since it writes a shared `.mcp.json` verbatim.
 
-### Read-only live test checklist
+### Claude Desktop
 
-Use this checklist for a controlled, non-production MISP lab:
+Add to `claude_desktop_config.json`:
 
-- [ ] Run `config-check`.
-- [ ] Confirm `/servers/getVersion` returns HTTP 200 from inside the Docker container.
-- [ ] Connect MCP Inspector over stdio.
-- [ ] Run `tools/list`.
-- [ ] Run `search_ioc` for a known non-matching IOC and confirm clean no-match behavior.
-- [ ] Run `search_ioc` for a known matching IPv4 indicator.
-- [ ] Run `search_ioc` for a known matching domain indicator.
-- [ ] Run `search_ioc` for a known matching SHA256 indicator.
-- [ ] Run `investigate_ioc` for a known matching IOC.
-- [ ] Run `summarize_event` for a known event ID.
-- [ ] Run `generate_ioc_report` for a known matching IOC.
-- [ ] Run `check_warninglists` for representative public, private, or lab indicators.
-- [ ] Attempt one write tool while `AGENTIC_MISP_MCP_ROLE=read_only` and
-      `AGENTIC_MISP_MCP_ENABLE_WRITE=false`; confirm it is blocked.
-- [ ] Search for the attempted test write value and confirm MISP was not modified.
-- [ ] Check `audit.jsonl` for successful calls, validation failures, runtime errors, and blocked
-      write decisions.
-- [ ] Confirm no write tools were executed.
+```json
+{
+  "mcpServers": {
+    "agentic-misp-mcp": {
+      "command": "uv",
+      "args": [
+        "--directory", "/path/to/agentic-misp-mcp",
+        "run", "agentic-misp-mcp", "--transport", "stdio"
+      ],
+      "env": {
+        "MISP_URL": "https://misp.example.local",
+        "MISP_API_KEY": "your_misp_api_key_here"
+      }
+    }
+  }
+}
+```
 
-The specific IOC and event ID values used in one lab may not exist in another MISP instance. Use
-known-good indicators from your own lab dataset. For the controlled-write path
-(`propose_event`/`propose_attribute`/the four `_with_approval` tools), see
-[`docs/approval-flow.md`](docs/approval-flow.md) and
-[`docs/live-validation-plan.md`](docs/live-validation-plan.md) — never run write testing against
-anything but an isolated lab.
+Prefer `--env-file`/OS-level secrets over inlining the key when your client supports it, and
+never commit a client config containing a real key.
 
-## Example agent prompts
+### Hermes Agent
 
-- "Investigate this IOC: `1.2.3.4`. Give me verdict, confidence, related events, and next steps."
-- "Pivot from this domain and list related IOCs worth hunting: `example.test`."
-- "Summarize MISP event `42` for a SOC handoff."
-- "Generate a Markdown IOC report for `http://evil.example.test/x`."
-- "Propose a MISP event for this phishing cluster, but do not write it yet."
-- "Submit this IOC to event `42` with approval after showing the pending approval payload."
+```bash
+hermes mcp add agentic-misp-mcp \
+  --command uv \
+  --args --directory /path/to/agentic-misp-mcp run agentic-misp-mcp --transport stdio
+```
 
-## Configuration
+Hermes performs a live discovery handshake and prompts to enable tools — answer `y` for all 25,
+or use `select` to enable a read-only subset (everything except the four `_with_approval` and
+two `propose_*` tools). Verify with `hermes mcp list` / `hermes mcp test agentic-misp-mcp`,
+then start a new Hermes session.
 
-| Variable | Required | Default | Notes |
-| --- | --- | --- | --- |
-| `MISP_URL` | Yes | none | Base URL for MISP, for example `https://misp.example.local`. |
-| `MISP_API_KEY` | Yes | none | Runtime-only MISP automation/API key. Never pass as a tool argument. |
-| `MISP_VERIFY_TLS` | No | `true` | Keep TLS verification enabled. |
-| `MISP_TIMEOUT_SECONDS` | No | `30` | HTTP timeout, > 0 and <= 300. |
-| `MISP_DEFAULT_LIMIT` | No | `20` | Default result limit. |
-| `MISP_MAX_LIMIT` | No | `100` | Maximum accepted result limit. |
-| `MISP_EVENT_ATTRIBUTE_LIMIT` | No | `50` | Attribute cap for event summaries/investigations. |
-| `MISP_RELATED_EVENT_LIMIT` | No | `5` | Related event expansion cap. |
-| `AGENTIC_MISP_MCP_AUDIT_LOG_PATH` | No | `./logs/audit.jsonl` | JSONL audit log path. |
-| `AGENTIC_MISP_MCP_LOG_LEVEL` | No | `INFO` | Application log level. |
-| `AGENTIC_MISP_MCP_ROLE` | No | `read_only` | `read_only`, `analyst_write`, `curator`, or `admin`. |
-| `AGENTIC_MISP_MCP_ENABLE_WRITE` | No | `false` | Global write-mode gate. |
-| `AGENTIC_MISP_MCP_REQUIRE_APPROVAL` | No | `true` | Lab-mode gate requiring explicit `approved=true`; production mode still requires `approval_request_id` even if this is `false`. |
-| `AGENTIC_MISP_MCP_APPROVAL_TOKEN` | No | unset | Optional lab/shared-secret hardening. When set in lab mode, approved write calls must include the matching `approval_token`; audit logs redact it. Not the production approval mechanism. |
-| `AGENTIC_MISP_MCP_APPROVAL_MODE` | No | `lab` | `lab` preserves the legacy `approved=true` flow; `production` requires persisted operator-approved request IDs. |
-| `AGENTIC_MISP_MCP_APPROVAL_STORE_PATH` | No | `./approvals.sqlite3` | SQLite store for production approval records; the agent must not have write access to it. |
-| `AGENTIC_MISP_MCP_APPROVAL_TTL_SECONDS` | No | `900` | Production approval lifetime before pending/approved records expire. |
-| `AGENTIC_MISP_MCP_ALLOWED_ATTRIBUTE_TYPES` | No | unset | Optional production guardrail for submitted attribute types. |
-| `AGENTIC_MISP_MCP_ALLOWED_ATTRIBUTE_CATEGORIES` | No | unset | Optional production guardrail for submitted attribute categories. |
-| `AGENTIC_MISP_MCP_ALLOWED_TAGS` | No | unset | Optional production guardrail for event tags; entries ending in `*` act as prefixes. |
-| `AGENTIC_MISP_MCP_ENABLE_PUBLISH` | No | `false` | Dedicated publish kill switch; production publish also requires curator/admin role and approval. |
-| `AGENTIC_MISP_MCP_MAX_RESPONSE_BYTES` | No | `5242880` | Maximum MISP HTTP response body size, enforced before JSON parsing. |
-| `AGENTIC_MISP_MCP_ALLOW_INSECURE_HTTP_BIND` | No | `false` | Allows experimental HTTP transport to bind a non-loopback host (e.g. `0.0.0.0` or `::`); keep false unless behind authenticated TLS termination. |
+### OpenCode (or similar local agent CLIs)
 
-See `docs/configuration.md` for more examples.
+```json
+{
+  "mcp": {
+    "agentic-misp-mcp": {
+      "type": "local",
+      "command": [
+        "uv", "--directory", "/path/to/agentic-misp-mcp",
+        "run", "agentic-misp-mcp", "--transport", "stdio"
+      ],
+      "environment": {
+        "MISP_URL": "https://misp.example.local",
+        "MISP_API_KEY": "your_misp_api_key_here"
+      }
+    }
+  }
+}
+```
 
-## Production deployment
+Any MCP client that can spawn a stdio subprocess works the same way: run
+`uv --directory /path/to/agentic-misp-mcp run agentic-misp-mcp --transport stdio` (or the
+`docker run --rm -i ... --transport stdio` equivalent from [Docker](#docker)).
 
-**`v0.2.0` is a GA release, evidence-based on the live validation in
-[`docs/live-validation-report-v0.2.0-rc.1.md`](docs/live-validation-report-v0.2.0-rc.1.md) — but
-it is not the same as full production-readiness certification against
-[`docs/production-readiness.md`](docs/production-readiness.md)'s broader, stricter checklist**
-(which additionally requires broader MISP version compatibility, a live HTTP `429`
-reproduction, and supply-chain/release hygiene — container image scanning, dependency
-vulnerability scanning, secret scanning, and a signed release tag — none of which are done yet).
-See that document for the full scope, requirements, and the acceptance criteria that must pass
-before that broader certification changes. This section shows the conservative deployment shape
-for the one target that document is scoped against first: **read-only** investigation and
-reporting (`AGENTIC_MISP_MCP_ROLE=read_only`, `AGENTIC_MISP_MCP_ENABLE_WRITE=false`) over
-**stdio**, via Docker.
+**Transport note:** stdio is the recommended production transport. The HTTP transport is
+experimental, has no built-in auth or TLS, and refuses to bind a non-loopback host unless
+`AGENTIC_MISP_MCP_ALLOW_INSECURE_HTTP_BIND=true`; if you must use it, put it behind an
+authenticated TLS-terminating gateway.
 
-1. **Build the image:**
+## Production checklist
 
-   ```bash
-   git clone https://github.com/hdyrawan/agentic-misp-mcp.git
-   cd agentic-misp-mcp
-   docker build -t agentic-misp-mcp:local .
-   ```
+Before pointing agents at a production MISP:
 
-2. **Configure a production env file outside the repository**, starting from the
-   production-oriented template (placeholders only — see
-   [`.env.production.example`](.env.production.example) for the full file with inline guidance):
+- [ ] Create a **dedicated least-privilege MISP API key** for this server (not a personal or
+      site-admin key).
+- [ ] Keep `AGENTIC_MISP_MCP_ROLE=read_only` and `AGENTIC_MISP_MCP_ENABLE_WRITE=false` for
+      normal agent use; enable writes only when a workflow genuinely needs them.
+- [ ] If writes are enabled, use `AGENTIC_MISP_MCP_APPROVAL_MODE=production` and keep the
+      approval CLI and approval database out of the agent's reach.
+- [ ] **Persist audit logs** (`AGENTIC_MISP_MCP_AUDIT_LOG_PATH`; mount a volume under Docker).
+- [ ] **Persist the approval store** (`AGENTIC_MISP_MCP_APPROVAL_STORE_PATH`).
+- [ ] Protect `MISP_API_KEY` — environment/secrets manager only; keep `.env` files out of git
+      and out of client configs that get shared.
+- [ ] Keep `MISP_VERIFY_TLS=true`; fix certificate problems with your internal CA, don't
+      disable verification.
+- [ ] Run `agentic-misp-mcp config-check` and `agentic-misp-mcp config doctor` after every
+      config change.
+- [ ] Run the test suite (`uv run --extra dev pytest -q`) on the deployed revision.
+- [ ] Smoke test with MCP Inspector (`tools/list`, then `get_misp_status`).
+- [ ] Review `audit.jsonl` after the first real tool calls, and periodically thereafter
+      (manual audit review is the accepted control — there is no built-in alerting).
+- [ ] Keep feed administration (enable/fetch/cache) in the MISP UI/API, outside MCP.
 
-   ```bash
-   mkdir -p /path/to/agentic-misp-mcp-runtime/logs
-   cp .env.production.example /path/to/agentic-misp-mcp-runtime/.env
-   # edit /path/to/agentic-misp-mcp-runtime/.env — set MISP_URL and MISP_API_KEY;
-   # leave MISP_VERIFY_TLS=true, AGENTIC_MISP_MCP_ROLE=read_only,
-   # AGENTIC_MISP_MCP_ENABLE_WRITE=false, and AGENTIC_MISP_MCP_REQUIRE_APPROVAL=true as-is.
-   ```
+Deeper guidance: [`docs/production-readiness.md`](docs/production-readiness.md),
+[`docs/production-write.md`](docs/production-write.md),
+[`docs/rollback.md`](docs/rollback.md).
 
-3. **Run `config-check`** before starting the server, every time the configuration changes:
+## Safety boundaries
 
-   ```bash
-   docker run --rm \
-     --env-file /path/to/agentic-misp-mcp-runtime/.env \
-     -v /path/to/agentic-misp-mcp-runtime/logs:/app/logs \
-     agentic-misp-mcp:local config-check
-   ```
+These are design boundaries, enforced in code and preserved across releases:
 
-   This validates configuration and confirms the audit-log path is writable. It does not connect
-   to MISP.
+- **No raw MISP API proxy.** Only the 25 workflow tools exist; there is no generic
+  endpoint-passthrough tool.
+- **No feed mutation.** No feed enable/disable/fetch/cache/edit/delete tools exist. Feed
+  observability (`list_feeds`, `get_feed_status`, `summarize_feed_health`) is strictly
+  read-only, with URLs and header/token-like fields redacted.
+- **No approval-store exposure.** No MCP tool can create, approve, reject, or read approval
+  records; production approvals happen only through the operator CLI.
+- **No ungated writes.** Every write path goes through role policy, the write-mode gate, and
+  the approval gate; results are explicit (`blocked`/`pending_approval`/`executed`/`failed`).
+- **No hidden mutation in read tools.** Read tools call read endpoints only.
+- **`propose_*` tools are dry-run only.** They build and validate payloads; they never invoke
+  a MISP write endpoint.
+- **No secret passthrough.** API keys, tokens, passwords, and authorization headers are never
+  accepted as tool arguments and are redacted from audit logs.
+- No shell execution or unrestricted filesystem tools; no user/org/server/settings admin tools.
 
-   Then run `agentic-misp-mcp config doctor` (same invocation, swap the final argument) for a
-   deeper operational-readiness check: write/approval-mode pairing, publish/role pairing,
-   approval-store and audit-log permission safety, allowlist coverage, approval TTL length, and
-   temporary-directory paths. It also does not connect to MISP, never prints secrets, and exits
-   nonzero on any `FAIL`. See [`docs/configuration.md`](docs/configuration.md#operational-readiness-doctor-v020-beta2).
+See [`docs/security.md`](docs/security.md) for the full security model and audit semantics.
 
-4. **Test MISP connectivity** before wiring up an MCP client, to confirm the deployment can
-   actually reach MISP with the configured TLS settings:
+## Scoring behavior
 
-   ```bash
-   docker run --rm \
-     --env-file /path/to/agentic-misp-mcp-runtime/.env \
-     --entrypoint python \
-     agentic-misp-mcp:local \
-     -c "import os, httpx; verify=os.environ.get('MISP_VERIFY_TLS','true').lower()=='true'; r=httpx.get(os.environ['MISP_URL'].rstrip('/') + '/servers/getVersion', headers={'Authorization': os.environ['MISP_API_KEY'], 'Accept':'application/json'}, verify=verify, timeout=10); print('STATUS:', r.status_code)"
-   ```
+Since `v0.3.0`, IOC scoring is **age-aware by default**. `investigate_ioc`,
+`generate_ioc_report`, and `pivot_ioc` responses include a `freshness` block that labels the
+intel behind a verdict:
 
-   Expect `STATUS: 200`. A TLS or connection error here means fix the deployment's network/CA
-   configuration before proceeding — do not fall back to `MISP_VERIFY_TLS=false` to make this
-   pass; that setting is lab-only (see [`docs/production-readiness.md`](docs/production-readiness.md#tls-requirements)).
+| Label | Meaning (defaults) |
+| --- | --- |
+| `fresh` | Newest signal ≤ 30 days old. |
+| `aging` | 31–90 days. |
+| `stale` | 91–365 days. |
+| `expired` | Older than 365 days. |
+| `unknown` | No usable timestamps found. |
 
-5. **Run the server over stdio**, with the audit log directory mounted so logs persist across
-   container restarts:
+How it affects scores:
 
-   ```bash
-   docker run --rm -i \
-     --env-file /path/to/agentic-misp-mcp-runtime/.env \
-     -v /path/to/agentic-misp-mcp-runtime/logs:/app/logs \
-     agentic-misp-mcp:local --transport stdio
-   ```
+- **Old intel scores lower by default.** Positive score factors are discounted by intel age
+  (default weights `1.0 / 0.75 / 0.4 / 0.15` for fresh/aging/stale/expired).
+- **Penalties are never age-discounted.** Warninglist hits and benign-tag penalties apply at
+  full strength regardless of age.
+- **Expired intel cannot become `likely_malicious`** on its own — expired-only intel is capped
+  below that threshold and needs fresh corroboration to cross it.
+- **`AGENTIC_MISP_MCP_AGE_WEIGHTING=false`** restores exact v0.2.x scoring (the `freshness`
+  block is still reported).
 
-   Point your MCP client at this same `docker run` invocation (see the Docker Quick start above
-   for an example client config) — the client, not this container, decides when to start/stop
-   the process, so there is no separate "daemon" to manage.
+This is a confidence-quality improvement, not a replacement for analyst judgment: a `fresh`
+hit on a 10-year-old OSINT event that was recently re-published still deserves human
+correlation with current telemetry before blocking or escalation.
 
-**HTTP transport is not the default recommendation for production.** It is experimental, has no
-built-in authentication or TLS, and refuses to bind a non-loopback host (`0.0.0.0`, `::`, or a LAN address) unless
-`AGENTIC_MISP_MCP_ALLOW_INSECURE_HTTP_BIND=true` is explicitly set. If you use it in production at
-all, it must sit behind an authenticated, TLS-terminating gateway (reverse proxy or service mesh)
-that terminates TLS and enforces authentication before any traffic reaches this server — stdio
-remains the primary supported production transport.
+## Troubleshooting
 
-Before treating any deployment as production, review
-[`docs/production-readiness.md`](docs/production-readiness.md)'s Docker hardening checklist
-(read-only root filesystem, resource limits, base-image patching) and release/sign-off checklist
-in full — this section covers the conservative deployment shape, not the complete readiness bar.
+| Symptom | Likely cause | Fix |
+| --- | --- | --- |
+| Connection error, `MISPClientError` | Wrong `MISP_URL`, or MISP unreachable from where the server runs | Verify the URL (scheme + host, no trailing API path); test `curl https://misp.example.local/servers/getVersion -H "Authorization: <key>"` from the same host/container. |
+| Authentication error, `MISPAuthenticationError` | Invalid or revoked `MISP_API_KEY` | Regenerate the automation key in MISP; confirm the env var actually reaches the process (`config-check` shows whether it is set, redacted). |
+| TLS verification failure | Self-signed or internal-CA certificate | Add the CA to the system trust store. `MISP_VERIFY_TLS=false` is an isolated-lab escape hatch only — never production. |
+| MISP returns permission denied | The API key's MISP role lacks the needed permission | Grant the minimal MISP permission the workflow needs (e.g. sighting creation for sightings), keeping the key least-privilege. |
+| Tool returns `blocked` | Policy working as intended: role or write-mode gate | Check `AGENTIC_MISP_MCP_ROLE` and `AGENTIC_MISP_MCP_ENABLE_WRITE`. The audit log records `outcome=blocked` with the reason. |
+| Write returns `pending_approval` | Approval required (the default) | Lab mode: re-call with `approved=true` (plus `approval_token` if configured). Production mode: an operator must approve via `agentic-misp-mcp approvals ...` and the call must present the resulting `approval_request_id`. |
+| `config-check` fails on audit path | Audit log directory missing or not writable | Create the directory / fix permissions; under Docker, mount a writable volume at the audit path. |
+| Approvals disappear after restart | Approval DB not persisted | Point `AGENTIC_MISP_MCP_APPROVAL_STORE_PATH` at persistent storage (Docker: a mounted volume). |
+| "Response too large" error | MISP response exceeded `AGENTIC_MISP_MCP_MAX_RESPONSE_BYTES` (fail-closed by design) | Narrow the query (smaller `limit`, tighter date range). Raising the cap is a last resort. |
+| MCP client can't spawn the server | Wrong command/path in the client config | Use absolute paths (`uv --directory /path/to/agentic-misp-mcp ...`); test the exact command in a terminal first; restart the client session after registering. |
+| Import errors / wrong Python | Wrong environment or Python < 3.11 | Use `uv run` (which pins the project env), or re-run `uv sync --extra dev`; check `python --version` ≥ 3.11. |
 
-## Security notes
+## Release status
 
-- Use stdio by default.
-- Treat HTTP transport as experimental. Binding to a non-loopback host (`0.0.0.0`, `::`, or a LAN address) is refused by default because HTTP mode has no built-in auth/TLS; use `127.0.0.1` or place it behind authenticated TLS termination and explicitly opt in.
-- Keep `.env`, audit logs, and API keys out of git.
-- Automated tests still use mocked MISP responses.
-- First manual read-only live lab validation has passed against MISP `2.5.42`; controlled-write validation has since passed against the same lab. Broader MISP version compatibility remains pending.
-- A read-only write-block test confirmed that `approved=true` does not bypass disabled write mode or the `read_only` role.
-- Blocked policy decisions are audited with `allowed=false`, `success=false`, and `outcome=blocked`.
-- Successful allowed calls are audited with `outcome=success`; runtime failures are audited with `outcome=error`; a controlled write that reaches MISP but is rejected by MISP itself (`saved`/`published: false`) is audited with `outcome=failed`.
-- Approval tokens and other sensitive values are redacted in audit logs.
-- See `SECURITY.md` and `docs/security.md` for reporting and deployment guidance.
-
-## Documentation
-
-- [`docs/security.md`](docs/security.md) — security model, tool boundary, audit logging.
-- [`docs/configuration.md`](docs/configuration.md) — full environment variable reference.
-- [`docs/testing.md`](docs/testing.md) — what the mocked test suite covers and does not cover yet.
-- [`docs/roles.md`](docs/roles.md) — `read_only` / `analyst_write` / `curator` / `admin` policy roles.
-- [`docs/approval-flow.md`](docs/approval-flow.md) — lab approval flow plus the `v0.2.0-beta.1` production approval flow.
-- [`docs/live-validation-plan.md`](docs/live-validation-plan.md) — completed lab validation evidence and remaining validation work.
-- [`docs/live-beta-validation-v0.2.0-beta.1.md`](docs/live-beta-validation-v0.2.0-beta.1.md) — live beta validation checklist before tagging `v0.2.0-beta.1`.
-- [`docs/live-beta-validation-v0.2.0-beta.2.md`](docs/live-beta-validation-v0.2.0-beta.2.md) — live validation checklist for the `v0.2.0-beta.2` operational-readiness hardening release.
-- [`docs/live-beta-validation-v0.2.0-rc.1.md`](docs/live-beta-validation-v0.2.0-rc.1.md) — live validation checklist for the `v0.2.0-rc.1` release candidate (now executed; see the report below).
-- [`docs/live-validation-report-v0.2.0-rc.1.md`](docs/live-validation-report-v0.2.0-rc.1.md) — the executed `v0.2.0-rc.1` live validation report: results, two blockers found and fixed, and evidence for the `v0.2.0` GA decision.
-- [`docs/misp-compatibility.md`](docs/misp-compatibility.md) — MISP version compatibility matrix: tested versions, assumptions, untested versions, and known risks.
-- [`docs/production-readiness.md`](docs/production-readiness.md) — production-readiness scope, requirements, and release/sign-off acceptance criteria (broader/stricter than the `v0.2.0` GA claim — see "Production deployment" above).
-- [`docs/ga-production-readiness-plan.md`](docs/ga-production-readiness-plan.md) — the phased plan for reaching a GA production-readiness claim; `v0.2.0` GA has been reached per this project's evidence-based criteria, though some items in this plan remain open (see "Roadmap" above).
-- [`docs/rollback.md`](docs/rollback.md) — rollback playbook for a mistaken controlled write: finding it in the audit log, correlating it with its approval record, and why a mistaken publish is not fully reversible.
-- [`docs/openapi-inventory.md`](docs/openapi-inventory.md) — sample MISP OpenAPI endpoint classification (planning only).
+- **Latest release:** `v0.3.1` — documentation/operator-readability patch on `v0.3.0`
+  (no MCP tool, scoring, or write-surface changes). See [`CHANGELOG.md`](CHANGELOG.md).
+- **Functional baseline:** `v0.3.0` — age-aware scoring, six new read-only tools (sightings,
+  event search, status, feed observability), read-tool response envelope.
+- **Supported MISP baseline:** `2.5.42`, live-validated 14/14 —
+  [`docs/live-validation-report-v0.3.0.md`](docs/live-validation-report-v0.3.0.md).
+- **Latest pre-merge review findings:**
+  [`docs/review-v0.3.0-findings.md`](docs/review-v0.3.0-findings.md).
+- **Tool count:** 25. **Tests:** 353 (mocked MISP responses; live validation is a separate
+  manual pass).
+- **Scope of the production claim:** `v0.2.0` was declared GA **for the MCP-server scope of
+  this project only** (server behavior, MISP API behavior, approval workflow, audit/redaction,
+  config safety) — not a SIEM/SOAR/SOC platform claim. `v0.3.x` extends that same scope. See
+  [`docs/ga-production-readiness-plan.md`](docs/ga-production-readiness-plan.md).
+- **Known limitations:** only MISP `2.5.42` is validated; a live HTTP `429` has mocked coverage
+  only (no safe way to trigger one in the lab); container/dependency/secret scanning and signed
+  release artifacts are not yet part of CI/release; HTTP transport is experimental; historical
+  OSINT hits should be correlated with current telemetry (mitigated but not removed by
+  age-aware scoring).
 
 ## Development
 
@@ -639,130 +467,38 @@ uv run --extra dev ruff format --check .
 uv run --extra dev pytest -q
 ```
 
-Equivalent Make targets:
-
-```bash
-make lint
-make format-check
-make test
-make check
-```
-
+Equivalent Make targets: `make lint`, `make format-check`, `make test`, `make check`.
 CI runs the same checks on Python 3.11 and 3.12.
 
-## Known live validation limitations
+## Documentation
 
-The first positive live validation used historical OSINT data from 2016. This is useful for
-proving MISP API compatibility and MCP workflow behavior, but it should not be treated as current
-threat activity without telemetry correlation.
-
-Future scoring improvements should consider stale-intel labeling or event-age weighting.
-
-Controlled write execution has been validated against an isolated lab (see the table above).
-Two real bugs surfaced during that pass and are now fixed:
-
-- A present-but-empty `AGENTIC_MISP_MCP_APPROVAL_TOKEN` (e.g. `KEY=` in a `.env` file) was parsed
-  as a configured empty-string token rather than "no token configured," silently blocking every
-  controlled-write execution. Blank/whitespace-only tokens now normalize to unset.
-- `tag_event_with_approval` and `publish_event_with_approval` reported `status: "executed"` even
-  when MISP itself rejected the operation (`saved`/`published: false` on an HTTP 200 response,
-  e.g. an unrecognized tag name). They now report a distinct `status: "failed"`, with a matching
-  `outcome: "failed"` audit entry, so a caller cannot mistake a MISP-side rejection for a real
-  write. See [`docs/approval-flow.md`](docs/approval-flow.md#executed-vs-failed).
-
-## Roadmap
-
-As of `v0.2.0` GA: warninglist hit/miss/`not_available`, large-result truncation, TLS fail-closed,
-timeout, `propose_event`/`propose_attribute` payload validation, and the full production approval
-lifecycle (including one real MISP write) are all live-validated — see
-[`docs/live-validation-report-v0.2.0-rc.1.md`](docs/live-validation-report-v0.2.0-rc.1.md). What
-remains open beyond GA:
-
-- A live (non-mocked) HTTP `429`/rate-limit reproduction — no safe way to trigger one in the lab
-  without a load-testing setup, which is out of scope (no DoS-style testing).
-- Validate against a second MISP version beyond `2.5.42` (`docs/misp-compatibility.md`).
-- Add broader audit outcome tests for additional write tools and error paths.
-- Add stale-intel labeling or event-age weighting for historical OSINT context.
-- Strengthen approval-operator separation beyond filesystem permissions (see
-  `docs/production-readiness.md`'s GA backlog).
-- Container image scanning, dependency vulnerability scanning, secret scanning, and a signed
-  release tag (`docs/production-readiness.md`, `docs/ga-production-readiness-plan.md`).
-- Additional controlled workflows only when they preserve the no-raw-proxy, policy-gated model.
+- [`docs/configuration.md`](docs/configuration.md) — full environment-variable reference,
+  Docker/Compose, client config shapes, `config doctor`.
+- [`docs/security.md`](docs/security.md) — security model, tool boundary, audit semantics.
+- [`docs/roles.md`](docs/roles.md) — role policy matrix.
+- [`docs/approval-flow.md`](docs/approval-flow.md) — lab and production approval flows.
+- [`docs/production-write.md`](docs/production-write.md) — production write deployment guidance.
+- [`docs/production-readiness.md`](docs/production-readiness.md) — the broader readiness
+  checklist and what it still requires.
+- [`docs/feed-observability.md`](docs/feed-observability.md) — feed tools and the feed safety
+  boundary.
+- [`docs/testing.md`](docs/testing.md) — what the mocked suite covers.
+- [`docs/misp-compatibility.md`](docs/misp-compatibility.md) — MISP version matrix.
+- [`docs/live-validation-report-v0.3.0.md`](docs/live-validation-report-v0.3.0.md) — latest
+  live validation evidence (earlier reports live alongside it in `docs/`).
+- [`docs/rollback.md`](docs/rollback.md) — rollback playbook for a mistaken controlled write.
 
 ## Contributing
 
-Contributions are welcome, but keep the project boundary intact: no raw API proxy, no secret passthrough, no unaudited tool path, and no write behavior without policy and approval gates. Start by reading `PROJECT_STATE.md`, `docs/security.md`, and `src/agentic_misp_mcp/tools/registry.py`.
+Contributions are welcome, but keep the project boundary intact: no raw API proxy, no secret
+passthrough, no unaudited tool path, and no write behavior without policy and approval gates.
+Start with `PROJECT_STATE.md`, [`docs/security.md`](docs/security.md), and
+`src/agentic_misp_mcp/tools/registry.py`.
 
-Commits should be attributed to their human author only — do not add AI co-author trailers (for example `Co-Authored-By: <AI assistant>`) to commits in this repository, regardless of what tooling was used to help write them.
+Commits should be attributed to their human author only — do not add AI co-author trailers
+(for example `Co-Authored-By: <AI assistant>`) to commits in this repository, regardless of
+what tooling was used to help write them.
 
+## License
 
-### v0.2.0-beta.1 production-write beta candidate
-
-The current `main` branch contains the `v0.2.0-beta.1` production-write beta candidate. It is suitable for isolated pilot validation, not GA production use. The default approval mode remains `AGENTIC_MISP_MCP_APPROVAL_MODE=lab`, preserving the existing `approved=true` lab flow. A new opt-in `production` mode adds persisted SQLite approvals for the four existing write-executing tools only: `submit_ioc_with_approval`, `add_sighting_with_approval`, `tag_event_with_approval`, and `publish_event_with_approval`. No new MISP endpoints, raw proxy behavior, or admin tools are exposed.
-
-In production mode, `approved=true` alone is blocked, even if `AGENTIC_MISP_MCP_REQUIRE_APPROVAL=false`. Execution requires an operator-approved `approval_request_id` from `agentic-misp-mcp approvals ...`; no MCP tool can approve or reject. Each production approval is one-time-use, TTL-bound by `AGENTIC_MISP_MCP_APPROVAL_TTL_SECONDS`, and bound to the exact canonical operation hash. The LLM/agent must not have shell access to the approval CLI or write access to the SQLite approval database. If redemption succeeds but the later MISP write fails, the approval remains consumed; the operator must approve a new request for any retry. Publishing is disabled by default with `AGENTIC_MISP_MCP_ENABLE_PUBLISH=false`; additional production guardrails include `AGENTIC_MISP_MCP_ALLOWED_ATTRIBUTE_TYPES`, `AGENTIC_MISP_MCP_ALLOWED_ATTRIBUTE_CATEGORIES`, and `AGENTIC_MISP_MCP_ALLOWED_TAGS`.
-
-See `docs/production-write.md` for the full beta deployment guidance and approval-store permission requirements.
-
-### v0.2.0-beta.2 operational-readiness hardening
-
-`v0.2.0-beta.2` builds on the `v0.2.0-beta.1` production-write beta with operator tooling and closed test gaps. It adds no new MCP tools, no new MISP write capability, and is still a beta, not GA production-ready.
-
-- `agentic-misp-mcp config doctor` — a deeper operational-readiness check beyond `config-check`: validates write/approval-mode pairing, publish/role pairing, approval-store and audit-log permission safety, production write allowlist coverage, approval TTL length, temporary-directory paths, and leftover lab approval tokens in production mode. Outputs `PASS`/`WARN`/`FAIL` per check, never prints secrets, and exits nonzero on any `FAIL`.
-- `agentic-misp-mcp approvals prune --older-than <duration> [--vacuum]` — operator-CLI-only maintenance that deletes old terminal (`used`/`rejected`/`expired`) approval records past an age threshold (`7d`, `30d`, `24h`, `3600s`-style durations), optionally followed by SQLite `VACUUM`. Never deletes `pending`/`approved` records. Not exposed through any MCP tool.
-- [`docs/rollback.md`](docs/rollback.md) — a rollback playbook for a mistaken controlled write.
-- Closed four `v0.2.0-beta.1` live-validation gaps with mocked/controlled tests: HTTP `429`, large-response truncation, a positive warninglist hit, and warninglist `not_available`, each exercised through the full registered-tool and audit path. See [`docs/live-validation-report-v0.2.0-beta.2.md`](docs/live-validation-report-v0.2.0-beta.2.md) for what was additionally validated live (the two new CLI commands, plus a read-only regression smoke test).
-
-### v0.2.0-rc.1 GA-readiness release candidate
-
-`v0.2.0-rc.1` builds on `v0.2.0-beta.2` and is a **release candidate for GA review**, not a GA
-claim. It adds no new MCP tools, no new MISP write capability, and no raw proxy/admin behavior.
-
-- `propose_event`/`propose_attribute` now validate the proposed payload before building it:
-  required fields, `distribution`/`threat_level_id`/`analysis` value ranges, tag list shape, and a
-  known-vocabulary allowlist of standard MISP attribute types/categories
-  (`src/agentic_misp_mcp/policy/proposal_validation.py`). A malformed or unsupported payload
-  returns a new `status: "invalid"` (audited as `outcome: "invalid"`, never `success`) with a
-  `validation_errors` list, instead of a proposal. Both tools still never call MISP either way.
-- Fixed `.github/dependabot.yml`, whose `package-ecosystem` was previously blank (no dependency
-  updates were actually running); it now tracks `pip` and `github-actions`.
-- Added [`docs/misp-compatibility.md`](docs/misp-compatibility.md): the MISP version compatibility
-  matrix (tested versions, assumptions, untested versions, and known risks).
-- Added [`docs/live-beta-validation-v0.2.0-rc.1.md`](docs/live-beta-validation-v0.2.0-rc.1.md): the
-  live validation checklist for this release candidate.
-- This remains a release candidate: live edge-case evidence (TLS fail-closed, timeout, a real
-  HTTP `429`, large-result truncation at realistic scale, a positive warninglist hit against real
-  data), live cross-checking of `propose_event`/`propose_attribute` payload shapes against a real
-  MISP instance, broader MISP version compatibility, and supply-chain/release hygiene items
-  (container image scanning, dependency vulnerability scanning, secret scanning, a signed release
-  tag) all remain open — see [`docs/ga-production-readiness-plan.md`](docs/ga-production-readiness-plan.md).
-  **Update:** the live validation this section describes as open was subsequently executed — see
-  the "v0.2.0 GA" section below and
-  [`docs/live-validation-report-v0.2.0-rc.1.md`](docs/live-validation-report-v0.2.0-rc.1.md).
-  Broader MISP version compatibility and the supply-chain/release hygiene items remain open.
-
-### v0.2.0 GA
-
-`v0.2.0` is the first GA release. It builds on `v0.2.0-rc.1` plus two fixes found during that
-release candidate's live validation pass against a real MISP `2.5.42` lab (see
-[`docs/live-validation-report-v0.2.0-rc.1.md`](docs/live-validation-report-v0.2.0-rc.1.md) for
-full evidence):
-
-- Fixed `add_sighting_with_approval` reporting a MISP-rejected sighting as `status: "executed"`
-  (audited as `outcome: "success"`) instead of `"failed"`.
-- Fixed `check_warninglists` silently reporting `not_available` for a real positive warninglist
-  hit against MISP `2.5.42`, instead of `hit: true` with the real match.
-- Live-validated (previously only mocked/unit-tested): TLS fail-closed, timeout, large-result
-  truncation, a positive warninglist hit, and the full production approval lifecycle end-to-end,
-  including one real MISP write and blocked replay/hash-mismatch/wrong-tool/expired/rejected
-  redemption attempts.
-- No new MCP tools, no new MISP write capability, no raw proxy/admin behavior were added at any
-  point from `v0.2.0-rc.1` to `v0.2.0` GA.
-
-**GA still does not mean zero limitations.** Explicitly out of scope for this GA claim: broader
-MISP version compatibility beyond `2.5.42` (see
-[`docs/misp-compatibility.md`](docs/misp-compatibility.md)), a live (non-mocked) HTTP `429`
-reproduction (no safe way to trigger one in the lab), and supply-chain/release hygiene items
-(container image scanning, dependency vulnerability scanning, secret scanning, a signed release
-tag) — see [`docs/ga-production-readiness-plan.md`](docs/ga-production-readiness-plan.md) for
-what's next beyond GA.
+MIT.

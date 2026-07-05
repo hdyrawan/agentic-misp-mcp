@@ -3,6 +3,16 @@
 Project: agentic-misp-mcp
 
 Current status:
+- **`v0.3.1` is the current release** (2026-07-05): a documentation/operator-readability patch
+  on `v0.3.0` — README rewritten for onboarding and production guidance, `llms.txt` refreshed,
+  no MCP tool/scoring/write-surface/response-shape changes. See `CHANGELOG.md`.
+- **`v0.3.0`** (2026-07-05, merge `9687b7f`) added age-aware scoring (freshness labels +
+  weighted scoring, default on; `AGENTIC_MISP_MCP_AGE_WEIGHTING=false` reproduces v0.2.x
+  scoring exactly), six new read-only tools (`get_ioc_sightings`, `search_events`,
+  `get_misp_status`, `list_feeds`, `get_feed_status`, `summarize_feed_health`), and the
+  read-tool response envelope (`tool_name`, `schema_version: 1`). Live-validated 14/14 against
+  the MISP `2.5.42` lab (`docs/live-validation-report-v0.3.0.md`); pre-merge review findings in
+  `docs/review-v0.3.0-findings.md`.
 - **`v0.2.0` is GA production-ready for the MCP server scope defined in this project** (MCP
   server behavior, MISP API behavior, approval workflow, audit/redaction, config safety,
   runtime/deployment docs) — not a SIEM/SOAR/SOC platform, case-management system, or broad
@@ -152,10 +162,9 @@ Current status:
   its release notes were amended instead). `v0.2.0` GA release prep (version bump, RC→GA doc
   wording) followed as this same pass's final step.
 
-Current tests: 257 passed on `main` (up from 220 at the start of the beta.2/rc.1 work, 254 at the
-`v0.2.0-rc.1` tag).
-Current MCP tool count: 19 (unchanged; `config doctor`, `approvals prune`, and the proposal
-validation layer are not MCP tools).
+Current tests: 353 passed on `main` (257 at `v0.2.0` GA).
+Current MCP tool count: 25 (`config doctor`, `approvals prune`, and the proposal/validation
+layers are not MCP tools).
 Current license: MIT.
 
 Current MCP tools:
@@ -172,17 +181,26 @@ Current MCP tools:
 11. generate_event_report
 12. generate_markdown_ioc_report
 13. generate_markdown_event_report
-14. propose_event
-15. propose_attribute
-16. submit_ioc_with_approval
-17. add_sighting_with_approval
-18. tag_event_with_approval
-19. publish_event_with_approval
+14. get_ioc_sightings
+15. search_events
+16. get_misp_status
+17. list_feeds
+18. get_feed_status
+19. summarize_feed_health
+20. propose_event
+21. propose_attribute
+22. submit_ioc_with_approval
+23. add_sighting_with_approval
+24. tag_event_with_approval
+25. publish_event_with_approval
 
 Hard rules:
 - No raw MISP API proxy
 - No generic user/organisation/server/settings-style admin tools
-- Write tools (14-19 above) are disabled by default and policy/approval-gated when enabled
+- No feed enable/disable/fetch/cache/edit/delete tools (feed observability, tools 17-19 above,
+  is read-only)
+- Proposal tools (20-21 above) are dry-run only and never call MISP write endpoints
+- Write tools (22-25 above) are disabled by default and policy/approval-gated when enabled
 - No Hermes runtime testing yet
 - Mocked tests only unless explicitly requested
 
@@ -213,9 +231,8 @@ Known limitations (explicitly not covered by the `v0.2.0` GA claim):
   mechanism.
 
 Next steps:
+- `v0.4.0` scope: sighting-aware refresh/decay and org-based source weighting for scoring.
 - Broader MISP version compatibility testing beyond `2.5.42` (`docs/misp-compatibility.md`).
 - Automate the three still-open supply-chain scans (dependency vulnerability, container image,
   secret scanning) in CI/release, per `docs/production-readiness.md`'s "Dependency update process
   and supply-chain release checklist".
-- Decide whether and when to tag `v0.2.0` (this GA release prep has not tagged or pushed a `v0.2.0`
-  git tag; that step was left for explicit approval).

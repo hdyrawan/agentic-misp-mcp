@@ -5,6 +5,30 @@ All notable changes to this project will be documented in this file.
 This project has mocked test coverage plus live-lab validation (read-only and controlled-write)
 against MISP `2.5.42`; broader MISP version compatibility testing is still pending.
 
+## v0.3.1 (2026-07-05) — documentation and operator-readability patch
+
+Documentation-only release. No MCP tool changes (count stays 25), no scoring behavior changes,
+no write-surface changes, no API/response-shape changes.
+
+### Changed
+
+- **`README.md` rewritten for onboarding and production operation**: plain-language intro and
+  safety model, audience section, workflow-grouped capability overview, a 25-tool summary table
+  with per-tool access level (read-only / dry-run / approval-gated write), a copy-paste quick
+  start (clone → `uv sync` → configure → `config-check` → tests → run → connect client → first
+  read-only call → audit review), a configuration reference split into required vs. optional
+  safety/scoring/feed variables, MCP client examples (MCP Inspector, Claude Code, Claude
+  Desktop, Hermes Agent, OpenCode-style local agents) with generic paths only, a production
+  checklist, explicit safety boundaries, an operator-friendly explanation of v0.3.0 age-aware
+  scoring, a troubleshooting table, and a release-status block. Stale v0.2.0-era release
+  narrative moved out of the README (it remains here in the changelog).
+- **`llms.txt` refreshed to the v0.3.1 state**: correct tool grouping for all 25 tools, 353
+  tests, v0.3.0 live-validation pointers, age-aware scoring summary, feed-observability
+  boundary, operator CLI summary, and updated coding-agent instructions.
+- Live-validation claims were not changed: the latest evidence remains the `v0.3.0` pass
+  (14/14, MISP `2.5.42`, `docs/live-validation-report-v0.3.0.md`); no re-validation was run for
+  this docs-only release.
+
 ## v0.3.0 (2026-07-05) — age-aware scoring and read-tool expansion
 
 Implements M1–M3 of `docs/improvement-plan-v0.3.0.md`. All response changes are additive; no
