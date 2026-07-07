@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+# Config-check companion to scripts/agentic-misp-mcp-stdio.
+#
+# Loads the same env file the stdio launcher would use, then runs
+# `agentic-misp-mcp config-check` so operators can verify MISP_URL/MISP_API_KEY
+# (and related settings) are visible to the server before wiring up an MCP client.
+#
+# Env file resolution:
+#   - AGENTIC_MISP_ENV_FILE, if set, is used as-is.
+#   - Otherwise, "<repo-root>/.env" is used if present.
+#   - If neither exists, config-check runs with whatever environment is already set.
+set -euo pipefail
+
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
+REPO_ROOT="$(cd -- "${SCRIPT_DIR}/.." >/dev/null 2>&1 && pwd)"
+
+ENV_FILE="${AGENTIC_MISP_ENV_FILE:-${REPO_ROOT}/.env}"
+
+if [[ -f "${ENV_FILE}" ]]; then
+  set -a
+  # shellcheck disable=SC1090
+  source "${ENV_FILE}"
+  set +a
+fi
+
+exec uv run --directory "${REPO_ROOT}" agentic-misp-mcp config-check "$@"

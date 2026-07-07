@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+# Local stdio launcher for MCP clients (Hermes, Claude Desktop, Claude Code, etc.).
+#
+# stdio MCP clients start this server as a subprocess and do not source your shell's
+# rc files or the repo .env, so MISP_URL/MISP_API_KEY are normally invisible to it.
+# This script loads the env file itself before handing off to the server, so clients
+# only need to point their "command" at this script.
+#
+# Env file resolution:
+#   - AGENTIC_MISP_ENV_FILE, if set, is used as-is.
+#   - Otherwise, "<repo-root>/.env" is used if present.
+#   - If neither exists, the server starts with whatever environment the client
+#     already provides (matching plain `uv run` behavior).
+set -euo pipefail
+
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
+REPO_ROOT="$(cd -- "${SCRIPT_DIR}/.." >/dev/null 2>&1 && pwd)"
+
+ENV_FILE="${AGENTIC_MISP_ENV_FILE:-${REPO_ROOT}/.env}"
+
+if [[ -f "${ENV_FILE}" ]]; then
+  set -a
+  # shellcheck disable=SC1090
+  source "${ENV_FILE}"
+  set +a
+fi
+
+exec uv run --directory "${REPO_ROOT}" agentic-misp-mcp --transport stdio "$@"
