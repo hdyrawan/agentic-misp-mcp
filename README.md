@@ -251,6 +251,37 @@ All examples use the stdio transport (the primary supported transport) and gener
 replace `/path/to/agentic-misp-mcp` with your checkout (e.g. `/home/user/agentic-misp-mcp` or
 `/opt/agentic-misp-mcp`).
 
+### Stdio launcher scripts (recommended)
+
+stdio MCP clients (Hermes, Claude Desktop, Claude Code, etc.) start this server as a subprocess
+and do **not** source your shell's rc files or the repo `.env`. Pointing a client straight at
+`uv run agentic-misp-mcp --transport stdio` can therefore fail (e.g. Hermes reporting
+"Connection closed") because `MISP_URL`/`MISP_API_KEY` are never visible to the subprocess.
+
+The repo ships two wrapper scripts that load an env file and then exec the real command:
+
+- `scripts/agentic-misp-mcp-stdio` — starts the MCP server over stdio.
+- `scripts/agentic-misp-mcp-config-check` — runs `config-check` with the same env loading, so
+  you can confirm `MISP_URL`/`MISP_API_KEY` resolve correctly before wiring up a client.
+
+Both scripts resolve the repo root from their own file location (not your current working
+directory), then load `${AGENTIC_MISP_ENV_FILE}` if that variable is set, otherwise
+`<repo-root>/.env` if it exists. Neither script echoes env values or secrets.
+
+```bash
+# Validate configuration before connecting a client
+scripts/agentic-misp-mcp-config-check
+
+# Point a stdio MCP client at the launcher, e.g. Hermes:
+hermes mcp add agentic-misp-mcp --command "/path/to/agentic-misp-mcp/scripts/agentic-misp-mcp-stdio"
+
+# Use an env file stored outside the repo instead of <repo-root>/.env
+AGENTIC_MISP_ENV_FILE=/path/to/secure/agentic-misp.env scripts/agentic-misp-mcp-config-check
+```
+
+Never commit `.env` (or any file referenced via `AGENTIC_MISP_ENV_FILE`) — it holds
+`MISP_API_KEY` and other secrets. `.gitignore` already excludes `.env` by default.
+
 ### MCP Inspector (smoke testing)
 
 ```bash
@@ -332,10 +363,11 @@ production note in [Docker](#docker) — and never bake `MISP_URL`/`MISP_API_KEY
 
 ### Hermes Agent
 
+Hermes spawns the server as a subprocess and does not load the repo `.env`, so use the
+[stdio launcher script](#stdio-launcher-scripts-recommended) rather than invoking `uv` directly:
+
 ```bash
-hermes mcp add agentic-misp-mcp \
-  --command uv \
-  --args --directory /path/to/agentic-misp-mcp run agentic-misp-mcp --transport stdio
+hermes mcp add agentic-misp-mcp --command "/path/to/agentic-misp-mcp/scripts/agentic-misp-mcp-stdio"
 ```
 
 Hermes performs a live discovery handshake and prompts to enable tools — answer `y` for all 25,
